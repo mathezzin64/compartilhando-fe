@@ -1,0 +1,9 @@
+{
+  "appId": "com.compartilhandofe.app",
+  "appName": "COMPARTILHANDO FE",
+  "webDir": "dist",
+  "server": {
+    "url": "https://compartilhando-fe.onrender.com",
+    "cleartext": false
+  }
+}

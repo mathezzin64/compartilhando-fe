@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">COMPARTILHANDO FE</string>
+    <string name="title_activity_main">COMPARTILHANDO FE</string>
+    <string name="package_name">com.compartilhandofe.app</string>
+    <string name="custom_url_scheme">com.compartilhandofe.app</string>
+</resources>
