@@ -1,15 +1,15 @@
-# COMPARTILHANDO FE
+# COMPARTILHANDO FÉ
 
-Aplicativo independente para compartilhar versiculos, experiencias, testemunhos e pedidos de oracao.
+Aplicativo independente para compartilhar versículos, experiências, testemunhos e pedidos de oração.
 
 ## Estrutura
 
 - `frontend`: React + Vite
 - `backend`: Node.js + Express + MongoDB
 
-## Configuracao do banco
+## Configuração do banco
 
-Copie `backend/.env.example` para `backend/.env` e informe uma conexao MongoDB separada do AD EBD.
+Copie `backend/.env.example` para `backend/.env` e informe uma conexão MongoDB separada do AD EBD.
 
 ```env
 MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/compartilhando-fe?retryWrites=true&w=majority
@@ -30,22 +30,22 @@ npm install
 npm run dev
 ```
 
-## Publicacao
+## Publicação
 
-O projeto inclui `render.yaml` com dois servicos independentes:
+O projeto inclui `render.yaml` com dois serviços independentes:
 
 - `compartilhando-fe-api`: backend Node/Express
-- `compartilhando-fe`: frontend estatico React/Vite
+- `compartilhando-fe`: frontend estático React/Vite
 
-No Render, configure a variavel secreta `MONGODB_URI` no servico da API usando um banco exclusivo para este app.
+No Render, configure a variável secreta `MONGODB_URI` no serviço da API usando um banco exclusivo para este app.
 
 Passos:
 
-1. Publique este projeto em um repositorio GitHub proprio.
+1. Publique este projeto em um repositório GitHub próprio.
 2. No Render, clique em **New +** e escolha **Blueprint**.
-3. Selecione o repositorio do **COMPARTILHANDO FE**.
-4. Quando o Render pedir variaveis secretas, preencha `MONGODB_URI`.
-5. Confirme a criacao dos servicos.
+3. Selecione o repositório do **COMPARTILHANDO FÉ**.
+4. Quando o Render pedir variáveis secretas, preencha `MONGODB_URI`.
+5. Confirme a criação dos serviços.
 
 URLs esperadas:
 
@@ -60,7 +60,7 @@ O APK usa Capacitor e abre a URL publicada do frontend:
 https://compartilhando-fe.onrender.com
 ```
 
-Assim, depois que o app estiver publicado no Render, novas alteracoes enviadas ao site aparecem automaticamente no APK.
+Assim, depois que o app estiver publicado no Render, novas alterações enviadas ao site aparecem automaticamente no APK.
 
 Para gerar APK debug:
 

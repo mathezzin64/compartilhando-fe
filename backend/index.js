@@ -12,7 +12,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const DNS_SERVERS = process.env.DNS_SERVERS;
 
 if (!MONGODB_URI) {
-  console.error('Erro: defina a variavel MONGODB_URI com a string de conexao do MongoDB.');
+  console.error('Erro: defina a variável MONGODB_URI com a string de conexão do MongoDB.');
   process.exit(1);
 }
 
@@ -83,32 +83,32 @@ async function seedDatabase() {
       id: nextId() + 1,
       categoria: 'versiculos',
       titulo: 'Um lembrete para hoje',
-      conteudo: 'O Senhor e a minha forca e o meu escudo; nele confiou o meu coracao.',
-      autorNome: 'Equipe Compartilhando Fe'
+      conteudo: 'O Senhor é a minha força e o meu escudo; nele confiou o meu coração.',
+      autorNome: 'Equipe Compartilhando Fé'
     },
     {
       id: nextId() + 2,
       categoria: 'testemunhos',
-      titulo: 'Gratidao que fortalece',
-      conteudo: 'Compartilhar o que Deus tem feito tambem anima quem esta precisando continuar firme.',
-      autorNome: 'Equipe Compartilhando Fe'
+      titulo: 'Gratidão que fortalece',
+      conteudo: 'Compartilhar o que Deus tem feito também anima quem está precisando continuar firme.',
+      autorNome: 'Equipe Compartilhando Fé'
     },
     {
       id: nextId() + 3,
       categoria: 'oracoes',
-      titulo: 'Pedido de oracao',
-      conteudo: 'Vamos orar pelas familias, pelos professores e por cada aluno que precisa de direcao.',
-      autorNome: 'Equipe Compartilhando Fe'
+      titulo: 'Pedido de oração',
+      conteudo: 'Vamos orar pelas famílias, pelos professores e por cada aluno que precisa de direção.',
+      autorNome: 'Equipe Compartilhando Fé'
     }
   ]);
 }
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', app: 'COMPARTILHANDO FE' });
+  res.json({ status: 'ok', app: 'COMPARTILHANDO FÉ' });
 });
 
 app.get('/', (req, res) => {
-  res.send('Backend COMPARTILHANDO FE rodando com MongoDB.');
+  res.send('Backend COMPARTILHANDO FÉ rodando com MongoDB.');
 });
 
 app.post('/auth/register', async (req, res, next) => {
@@ -118,16 +118,16 @@ app.post('/auth/register', async (req, res, next) => {
     const senha = String(req.body.senha || '');
 
     if (!nome || !email || !senha) {
-      return res.status(400).json({ error: 'Nome, email e senha sao obrigatorios' });
+      return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
     }
 
     if (senha.length < 6) {
-      return res.status(400).json({ error: 'A senha deve ter no minimo 6 caracteres' });
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres' });
     }
 
     const usuarioExistente = await Usuario.findOne({ email }).lean();
     if (usuarioExistente) {
-      return res.status(409).json({ error: 'Este email ja esta cadastrado' });
+      return res.status(409).json({ error: 'Este email já está cadastrado' });
     }
 
     const usuario = await Usuario.create({
@@ -152,12 +152,12 @@ app.post('/auth/login', async (req, res, next) => {
     const senha = String(req.body.senha || '');
 
     if (!email || !senha) {
-      return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
+      return res.status(400).json({ error: 'Email e senha são obrigatórios' });
     }
 
     const usuario = await Usuario.findOne({ email, senhaHash: hashSenha(senha) }).lean();
     if (!usuario) {
-      return res.status(401).json({ error: 'Email ou senha invalidos' });
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
 
     res.json({
@@ -203,11 +203,11 @@ app.post('/usuarios/:id/seguir', async (req, res, next) => {
     const seguidorId = toNumber(req.body.seguidorId);
 
     if (!Number.isFinite(seguidoId) || !Number.isFinite(seguidorId)) {
-      return res.status(400).json({ error: 'Perfis invalidos' });
+      return res.status(400).json({ error: 'Perfis inválidos' });
     }
 
     if (seguidoId === seguidorId) {
-      return res.status(400).json({ error: 'Voce nao pode seguir seu proprio perfil' });
+      return res.status(400).json({ error: 'Você não pode seguir seu próprio perfil' });
     }
 
     const [seguido, seguidor] = await Promise.all([
@@ -216,7 +216,7 @@ app.post('/usuarios/:id/seguir', async (req, res, next) => {
     ]);
 
     if (!seguido || !seguidor) {
-      return res.status(404).json({ error: 'Perfil nao encontrado' });
+      return res.status(404).json({ error: 'Perfil não encontrado' });
     }
 
     seguidor.seguindoIds = [...new Set([...(seguidor.seguindoIds || []), seguidoId])];
@@ -237,19 +237,19 @@ app.delete('/usuarios/:id/seguir', async (req, res, next) => {
     const seguidorId = toNumber(req.body.seguidorId);
 
     if (!Number.isFinite(seguidoId) || !Number.isFinite(seguidorId)) {
-      return res.status(400).json({ error: 'Perfis invalidos' });
+      return res.status(400).json({ error: 'Perfis inválidos' });
     }
 
     const seguidor = await Usuario.findOne({ id: seguidorId });
     if (!seguidor) {
-      return res.status(404).json({ error: 'Perfil nao encontrado' });
+      return res.status(404).json({ error: 'Perfil não encontrado' });
     }
 
     seguidor.seguindoIds = (seguidor.seguindoIds || []).filter((id) => id !== seguidoId);
     await seguidor.save();
 
     res.json({
-      message: 'Voce deixou de seguir este perfil',
+      message: 'Você deixou de seguir este perfil',
       usuario: serializarUsuario(seguidor)
     });
   } catch (error) {
@@ -263,12 +263,12 @@ app.get('/usuarios/:id/posts', async (req, res, next) => {
     const categoria = String(req.query.categoria || '').trim();
 
     if (!Number.isFinite(autorId)) {
-      return res.status(400).json({ error: 'Perfil invalido' });
+      return res.status(400).json({ error: 'Perfil inválido' });
     }
 
     const usuario = await Usuario.findOne({ id: autorId }).select('id nome email').lean();
     if (!usuario) {
-      return res.status(404).json({ error: 'Perfil nao encontrado' });
+      return res.status(404).json({ error: 'Perfil não encontrado' });
     }
 
     const posts = await Post.find(criarFiltroPosts({ categoria, autorId })).sort({ createdAt: -1 }).lean();
@@ -284,12 +284,12 @@ app.get('/usuarios/:id/seguindo/posts', async (req, res, next) => {
     const categoria = String(req.query.categoria || '').trim();
 
     if (!Number.isFinite(usuarioId)) {
-      return res.status(400).json({ error: 'Perfil invalido' });
+      return res.status(400).json({ error: 'Perfil inválido' });
     }
 
     const usuario = await Usuario.findOne({ id: usuarioId }).select('id seguindoIds').lean();
     if (!usuario) {
-      return res.status(404).json({ error: 'Perfil nao encontrado' });
+      return res.status(404).json({ error: 'Perfil não encontrado' });
     }
 
     const filtro = criarFiltroPosts({ categoria });
@@ -324,17 +324,17 @@ app.post('/posts', async (req, res, next) => {
     const autorNome = String(req.body.autorNome || '').trim();
 
     if (!['versiculos', 'experiencias', 'testemunhos', 'oracoes'].includes(categoria)) {
-      return res.status(400).json({ error: 'Categoria invalida' });
+      return res.status(400).json({ error: 'Categoria inválida' });
     }
 
     if (!titulo || !conteudo) {
-      return res.status(400).json({ error: 'Titulo e conteudo sao obrigatorios' });
+      return res.status(400).json({ error: 'Título e conteúdo são obrigatórios' });
     }
 
     if (autorId) {
       const usuario = await Usuario.findOne({ id: autorId }).lean();
       if (!usuario) {
-        return res.status(404).json({ error: 'Usuario nao encontrado' });
+        return res.status(404).json({ error: 'Usuário não encontrado' });
       }
     }
 
@@ -365,9 +365,9 @@ async function start() {
   try {
     await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
     await seedDatabase();
-    console.log('MongoDB conectado ao COMPARTILHANDO FE.');
+    console.log('MongoDB conectado ao COMPARTILHANDO FÉ.');
     app.listen(PORT, () => {
-      console.log(`Backend COMPARTILHANDO FE rodando na porta ${PORT}`);
+      console.log(`Backend COMPARTILHANDO FÉ rodando na porta ${PORT}`);
     });
   } catch (error) {
     console.error('Erro ao conectar no MongoDB:', error.message);

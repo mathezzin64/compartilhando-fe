@@ -18,17 +18,17 @@ import API_BASE_URL from './api';
 
 const categories = [
   { id: 'todas', label: 'Todas', icon: Heart },
-  { id: 'versiculos', label: 'Versiculos', icon: BookOpen },
-  { id: 'experiencias', label: 'Experiencias', icon: User },
+  { id: 'versiculos', label: 'Versículos', icon: BookOpen },
+  { id: 'experiencias', label: 'Experiências', icon: User },
   { id: 'testemunhos', label: 'Testemunhos', icon: MessageCircle },
-  { id: 'oracoes', label: 'Oracoes', icon: HandHeart }
+  { id: 'oracoes', label: 'Orações', icon: HandHeart }
 ];
 
 const categoryLabels = {
-  versiculos: 'Versiculos',
-  experiencias: 'Experiencias',
+  versiculos: 'Versículos',
+  experiencias: 'Experiências',
   testemunhos: 'Testemunhos',
-  oracoes: 'Oracoes'
+  oracoes: 'Orações'
 };
 
 function AuthModal({ mode, onClose, onModeChange, onAuth }) {
@@ -46,7 +46,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
     setError('');
 
     if (!form.email || !form.senha || (isRegister && !form.nome)) {
-      setError('Preencha todos os campos obrigatorios.');
+      setError('Preencha todos os campos obrigatórios.');
       return;
     }
 
@@ -60,14 +60,14 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Nao foi possivel continuar.');
+        setError(data.error || 'Não foi possível continuar.');
         return;
       }
 
       onAuth(data.usuario);
       onClose();
     } catch {
-      setError('Erro de conexao com o servidor.');
+      setError('Erro de conexão com o servidor.');
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
                 type="password"
                 value={form.senha}
                 onChange={handleChange}
-                placeholder="Minimo 6 caracteres"
+                placeholder="Mínimo 6 caracteres"
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                 disabled={loading}
               />
@@ -139,7 +139,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
         </form>
 
         <button className="text-button" onClick={() => onModeChange(isRegister ? 'login' : 'register')}>
-          {isRegister ? 'Ja tem uma conta? Entrar' : 'Nao tem uma conta? Criar conta'}
+          {isRegister ? 'Já tem uma conta? Entrar' : 'Não tem uma conta? Criar conta'}
         </button>
       </section>
     </div>
@@ -197,12 +197,12 @@ function App() {
       const response = await fetch(url);
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Nao foi possivel carregar os posts. Tente novamente.');
+        setError(data.error || 'Não foi possível carregar os posts. Tente novamente.');
         return;
       }
       setPosts(Array.isArray(data) ? data : data.posts || []);
     } catch {
-      setError('Nao foi possivel carregar os posts. Tente novamente.');
+      setError('Não foi possível carregar os posts. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -271,14 +271,14 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Nao foi possivel publicar.');
+        setError(data.error || 'Não foi possível publicar.');
         return;
       }
       setPosts((current) => [data.post, ...current]);
       setNewPost({ categoria: 'versiculos', titulo: '', conteudo: '' });
       setError('');
     } catch {
-      setError('Nao foi possivel publicar agora.');
+      setError('Não foi possível publicar agora.');
     }
   };
 
@@ -297,7 +297,7 @@ function App() {
     const data = await response.json();
 
     if (!response.ok) {
-      setError(data.error || 'Nao foi possivel atualizar o perfil.');
+      setError(data.error || 'Não foi possível atualizar o perfil.');
       return;
     }
 
@@ -316,13 +316,13 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Compartilhando Fe">
+        <a className="brand" href="/" aria-label="Compartilhando Fé">
           <span className="logo">
             <Heart size={26} fill="currentColor" />
           </span>
           <span>
             <strong>COMPARTILHANDO F&Eacute;</strong>
-            <small>Conectando coracoes</small>
+            <small>Conectando corações</small>
           </span>
         </a>
 
@@ -341,12 +341,12 @@ function App() {
 
       <section className="hero">
         <div>
-          <p>Compartilhe versiculos, experiencias, testemunhos e pedidos de oracao.</p>
+          <p>Compartilhe versículos, experiências, testemunhos e pedidos de oração.</p>
           <h1>COMPARTILHANDO F&Eacute;</h1>
         </div>
         <div className="search-pill">
           <Search size={20} />
-          <span>Comunidade de fe</span>
+          <span>Comunidade de fé</span>
         </div>
       </section>
 
@@ -399,7 +399,7 @@ function App() {
         <section className="compose">
           <div>
             <PenLine size={21} />
-            <h2>Nova publicacao</h2>
+            <h2>Nova publicação</h2>
           </div>
           <form onSubmit={publishPost}>
             <select
@@ -413,7 +413,7 @@ function App() {
             <input
               value={newPost.titulo}
               onChange={(event) => setNewPost((current) => ({ ...current, titulo: event.target.value }))}
-              placeholder="Titulo"
+              placeholder="Título"
             />
             <textarea
               value={newPost.conteudo}
@@ -481,7 +481,7 @@ function App() {
           {filteredPosts.map((post) => (
             <article key={post.id} className="post">
               <div>
-                <span>{categoryLabels[post.categoria] || 'Publicacao'}</span>
+                <span>{categoryLabels[post.categoria] || 'Publicação'}</span>
                 <time>{new Date(post.createdAt).toLocaleDateString('pt-BR')}</time>
               </div>
               <h2>{post.titulo}</h2>
@@ -498,7 +498,7 @@ function App() {
 
           {filteredPosts.length === 0 && (
             <section className="status">
-              {view === 'seguindo' ? 'Nenhuma publicacao dos perfis que voce segue ainda.' : 'Nenhuma publicacao nessa categoria ainda.'}
+              {view === 'seguindo' ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Nenhuma publicação nessa categoria ainda.'}
             </section>
           )}
         </section>

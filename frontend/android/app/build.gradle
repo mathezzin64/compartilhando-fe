@@ -24,7 +24,7 @@ android {
     }
     applicationVariants.configureEach { variant ->
         variant.outputs.configureEach {
-            outputFileName = "COMPARTILHANDO FE-${variant.name}.apk"
+            outputFileName = "COMPARTILHANDO FÉ-${variant.name}.apk"
         }
     }
 }
