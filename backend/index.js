@@ -305,8 +305,18 @@ app.get('/usuarios/:id/seguindo/posts', async (req, res, next) => {
 app.get('/posts', async (req, res, next) => {
   try {
     const categoria = String(req.query.categoria || '').trim();
+    const termo = String(req.query.q || '').trim();
     const autorId = req.query.autorId ? toNumber(req.query.autorId) : null;
     const filtro = criarFiltroPosts({ categoria, autorId });
+
+    if (termo) {
+      const regex = { $regex: termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+      filtro.$or = [
+        { titulo: regex },
+        { conteudo: regex },
+        { autorNome: regex }
+      ];
+    }
 
     const posts = await Post.find(filtro).sort({ createdAt: -1 }).lean();
     res.json(posts);

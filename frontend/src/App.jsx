@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
   HandHeart,
   Heart,
+  Home,
   Lock,
   LogIn,
   Mail,
   MessageCircle,
   PenLine,
+  PlusCircle,
+  RefreshCw,
   Search,
   User,
   UserPlus,
@@ -147,18 +150,24 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 }
 
 function App() {
+  const [tab, setTab] = useState('inicio');
+  const [feedMode, setFeedMode] = useState('todos');
   const [category, setCategory] = useState('todas');
-  const [view, setView] = useState('todos');
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState([]);
-  const [profileSearch, setProfileSearch] = useState('');
+  const [searchPosts, setSearchPosts] = useState([]);
+  const [searchProfiles, setSearchProfiles] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [profilesLoading, setProfilesLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState('');
   const [modalMode, setModalMode] = useState(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const touchStartY = useRef(null);
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('compartilhando-fe-user');
+    const saved = localStorage.getItem('revigorio-fe-user') || localStorage.getItem('compartilhando-fe-user');
     return saved ? JSON.parse(saved) : null;
   });
   const [newPost, setNewPost] = useState({
@@ -176,25 +185,22 @@ function App() {
     setUser(nextUser ? { ...nextUser, seguindoIds: nextUser.seguindoIds || [] } : null);
   };
 
-  const loadPosts = async (nextView = view, profile = selectedProfile) => {
+  const buildPostUrl = (mode = feedMode, profile = selectedProfile) => {
+    if (mode === 'seguindo' && user) return `${API_BASE_URL}/usuarios/${user.id}/seguindo/posts`;
+    if (mode === 'perfil' && profile) return `${API_BASE_URL}/usuarios/${profile.id}/posts`;
+    return `${API_BASE_URL}/posts`;
+  };
+
+  const loadPosts = async (mode = feedMode, profile = selectedProfile) => {
     setLoading(true);
     setError('');
     try {
-      let url = `${API_BASE_URL}/posts`;
-
-      if (nextView === 'seguindo') {
-        if (!user) {
-          setPosts([]);
-          return;
-        }
-        url = `${API_BASE_URL}/usuarios/${user.id}/seguindo/posts`;
+      if (mode === 'seguindo' && !user) {
+        setPosts([]);
+        return;
       }
 
-      if (nextView === 'perfil' && profile) {
-        url = `${API_BASE_URL}/usuarios/${profile.id}/posts`;
-      }
-
-      const response = await fetch(url);
+      const response = await fetch(buildPostUrl(mode, profile));
       const data = await response.json();
       if (!response.ok) {
         setError(data.error || 'Não foi possível carregar os posts. Tente novamente.');
@@ -208,24 +214,50 @@ function App() {
     }
   };
 
-  const loadProfiles = async (term = profileSearch) => {
-    if (!user) {
-      setProfiles([]);
-      return;
-    }
-
-    setProfilesLoading(true);
+  const loadProfiles = async (term = '') => {
     try {
-      const params = new URLSearchParams({ viewerId: String(user.id) });
+      const params = new URLSearchParams();
+      if (user) params.set('viewerId', String(user.id));
       if (term.trim()) params.set('q', term.trim());
       const response = await fetch(`${API_BASE_URL}/usuarios?${params.toString()}`);
       const data = await response.json();
       setProfiles(response.ok ? data : []);
+      return response.ok ? data : [];
     } catch {
       setProfiles([]);
-    } finally {
-      setProfilesLoading(false);
+      return [];
     }
+  };
+
+  const runSearch = async (event) => {
+    event?.preventDefault();
+    setSearchLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm.trim()) params.set('q', searchTerm.trim());
+      const [postsResponse, profilesResult] = await Promise.all([
+        fetch(`${API_BASE_URL}/posts?${params.toString()}`),
+        loadProfiles(searchTerm)
+      ]);
+      const postsData = await postsResponse.json();
+      setSearchPosts(postsResponse.ok ? postsData : []);
+      setSearchProfiles(profilesResult);
+    } catch {
+      setSearchPosts([]);
+      setSearchProfiles([]);
+      setError('Não foi possível pesquisar agora.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const refreshCurrent = async () => {
+    setIsRefreshing(true);
+    if (tab === 'pesquisar') await runSearch();
+    else if (tab === 'perfil' && user) await loadPosts('perfil', user);
+    else await loadPosts(feedMode, selectedProfile);
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
@@ -234,30 +266,51 @@ function App() {
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('compartilhando-fe-user', JSON.stringify(user));
+      localStorage.setItem('revigorio-fe-user', JSON.stringify(user));
+      localStorage.removeItem('compartilhando-fe-user');
     } else {
+      localStorage.removeItem('revigorio-fe-user');
       localStorage.removeItem('compartilhando-fe-user');
     }
   }, [user]);
 
-  useEffect(() => {
-    if (view === 'perfis') loadProfiles();
-  }, [view, user]);
+  const handleTouchStart = (event) => {
+    if (window.scrollY === 0) touchStartY.current = event.touches[0].clientY;
+  };
 
-  const changeView = (nextView) => {
-    setView(nextView);
+  const handleTouchMove = (event) => {
+    if (touchStartY.current === null || window.scrollY > 0) return;
+    const distance = event.touches[0].clientY - touchStartY.current;
+    if (distance > 0) setPullDistance(Math.min(distance, 92));
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullDistance > 64) await refreshCurrent();
+    touchStartY.current = null;
+    setPullDistance(0);
+  };
+
+  const changeFeedMode = (mode) => {
+    setFeedMode(mode);
     setSelectedProfile(null);
-    if (nextView === 'perfis') {
-      loadProfiles();
-      setLoading(false);
-      return;
-    }
-    loadPosts(nextView, null);
+    setTab('inicio');
+    loadPosts(mode, null);
+  };
+
+  const openProfile = async (profile) => {
+    setSelectedProfile(profile);
+    setFeedMode('perfil');
+    setTab('inicio');
+    await loadPosts('perfil', profile);
   };
 
   const publishPost = async (event) => {
     event.preventDefault();
-    if (!user || !newPost.titulo || !newPost.conteudo) return;
+    if (!user) {
+      setModalMode('login');
+      return;
+    }
+    if (!newPost.titulo || !newPost.conteudo) return;
 
     try {
       const response = await fetch(`${API_BASE_URL}/posts`, {
@@ -276,6 +329,8 @@ function App() {
       }
       setPosts((current) => [data.post, ...current]);
       setNewPost({ categoria: 'versiculos', titulo: '', conteudo: '' });
+      setTab('inicio');
+      setFeedMode('todos');
       setError('');
     } catch {
       setError('Não foi possível publicar agora.');
@@ -302,19 +357,56 @@ function App() {
     }
 
     updateUser(data.usuario);
-    setProfiles((current) => current.map((item) => (
+    const updateList = (items) => items.map((item) => (
       item.id === profile.id ? { ...item, seguindo: !seguindo } : item
-    )));
+    ));
+    setProfiles(updateList);
+    setSearchProfiles(updateList);
   };
 
-  const openProfile = async (profile) => {
-    setSelectedProfile(profile);
-    setView('perfil');
-    await loadPosts('perfil', profile);
-  };
+  const renderPost = (post) => (
+    <article key={post.id} className="post">
+      <div>
+        <span>{categoryLabels[post.categoria] || 'Publicação'}</span>
+        <time>{new Date(post.createdAt).toLocaleDateString('pt-BR')}</time>
+      </div>
+      <h2>{post.titulo}</h2>
+      <p>{post.conteudo}</p>
+      <footer>
+        {post.autorId ? (
+          <button onClick={() => openProfile({ id: post.autorId, nome: post.autorNome })}>{post.autorNome}</button>
+        ) : (
+          post.autorNome
+        )}
+      </footer>
+    </article>
+  );
+
+  const renderProfileCard = (profile) => (
+    <article className="profile-card" key={profile.id}>
+      <button className="profile-main" onClick={() => openProfile(profile)}>
+        <span>{profile.nome.slice(0, 1).toUpperCase()}</span>
+        <strong>{profile.nome}</strong>
+        <small>{profile.email}</small>
+      </button>
+      <button className={profile.seguindo ? 'outline-button' : 'gradient-button'} onClick={() => toggleFollow(profile)}>
+        {profile.seguindo ? 'Seguindo' : 'Seguir'}
+      </button>
+    </article>
+  );
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className={`pull-refresh ${pullDistance > 0 || isRefreshing ? 'visible' : ''}`} style={{ height: pullDistance ? `${pullDistance}px` : undefined }}>
+        <RefreshCw size={18} className={isRefreshing ? 'spin' : ''} />
+        <span>{isRefreshing ? 'Atualizando...' : 'Solte para atualizar'}</span>
+      </div>
+
       <header className="topbar">
         <a className="brand" href="/" aria-label="Revigório de Fé">
           <span className="logo">
@@ -350,24 +442,20 @@ function App() {
         </div>
       </section>
 
-      <section className="filter-panel">
-        <div className="view-tabs">
-          <button className={view === 'todos' ? 'active' : ''} onClick={() => changeView('todos')}>
-            <Heart size={18} />
-            Todos
-          </button>
-          <button className={view === 'seguindo' ? 'active' : ''} onClick={() => changeView('seguindo')}>
-            <Users size={18} />
-            Seguindo
-          </button>
-          <button className={view === 'perfis' ? 'active' : ''} onClick={() => changeView('perfis')}>
-            <UserPlus size={18} />
-            Perfis
-          </button>
-        </div>
+      {tab === 'inicio' && (
+        <>
+          <section className="filter-panel">
+            <div className="view-tabs">
+              <button className={feedMode === 'todos' ? 'active' : ''} onClick={() => changeFeedMode('todos')}>
+                <Home size={18} />
+                Todos
+              </button>
+              <button className={feedMode === 'seguindo' ? 'active' : ''} onClick={() => changeFeedMode('seguindo')}>
+                <Users size={18} />
+                Seguindo
+              </button>
+            </div>
 
-        {view !== 'perfis' && (
-          <>
             <p>Filtrar por categoria</p>
             <div className="categories">
               {categories.map((item) => {
@@ -384,125 +472,155 @@ function App() {
                 );
               })}
             </div>
-          </>
-        )}
 
-        {view === 'perfil' && selectedProfile && (
-          <div className="profile-heading">
-            <strong>{selectedProfile.nome}</strong>
-            <button onClick={() => changeView('perfis')}>Voltar aos perfis</button>
-          </div>
-        )}
-      </section>
+            {feedMode === 'perfil' && selectedProfile && (
+              <div className="profile-heading">
+                <strong>{selectedProfile.nome}</strong>
+                <button onClick={() => changeFeedMode('todos')}>Voltar ao início</button>
+              </div>
+            )}
+          </section>
 
-      {user && view !== 'perfis' && (
-        <section className="compose">
-          <div>
-            <PenLine size={21} />
-            <h2>Nova publicação</h2>
-          </div>
-          <form onSubmit={publishPost}>
-            <select
-              value={newPost.categoria}
-              onChange={(event) => setNewPost((current) => ({ ...current, categoria: event.target.value }))}
-            >
-              {categories.filter((item) => item.id !== 'todas').map((item) => (
-                <option key={item.id} value={item.id}>{item.label}</option>
-              ))}
-            </select>
-            <input
-              value={newPost.titulo}
-              onChange={(event) => setNewPost((current) => ({ ...current, titulo: event.target.value }))}
-              placeholder="Título"
-            />
-            <textarea
-              value={newPost.conteudo}
-              onChange={(event) => setNewPost((current) => ({ ...current, conteudo: event.target.value }))}
-              placeholder="Escreva sua mensagem"
-              rows="4"
-            />
-            <button className="gradient-button">Publicar</button>
-          </form>
-        </section>
+          {loading && <section className="status">Carregando posts...</section>}
+          {!loading && error && (
+            <section className="error-panel">
+              <p>{error}</p>
+              <button onClick={() => loadPosts()}>Tentar novamente</button>
+            </section>
+          )}
+          {!loading && !error && (
+            <section className="feed">
+              {filteredPosts.map(renderPost)}
+              {filteredPosts.length === 0 && (
+                <section className="status">
+                  {feedMode === 'seguindo' ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Nenhuma publicação nessa categoria ainda.'}
+                </section>
+              )}
+            </section>
+          )}
+        </>
       )}
 
-      {view === 'perfis' && (
-        <section className="profiles-panel">
+      {tab === 'criar' && (
+        <section className="compose page-panel">
           {user ? (
             <>
-              <form onSubmit={(event) => { event.preventDefault(); loadProfiles(); }} className="profile-search">
-                <Search size={19} />
+              <div>
+                <PenLine size={21} />
+                <h2>Criar post</h2>
+              </div>
+              <form onSubmit={publishPost}>
+                <select
+                  value={newPost.categoria}
+                  onChange={(event) => setNewPost((current) => ({ ...current, categoria: event.target.value }))}
+                >
+                  {categories.filter((item) => item.id !== 'todas').map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
                 <input
-                  value={profileSearch}
-                  onChange={(event) => setProfileSearch(event.target.value)}
-                  placeholder="Buscar perfil para seguir"
+                  value={newPost.titulo}
+                  onChange={(event) => setNewPost((current) => ({ ...current, titulo: event.target.value }))}
+                  placeholder="Título"
                 />
-                <button>Buscar</button>
+                <textarea
+                  value={newPost.conteudo}
+                  onChange={(event) => setNewPost((current) => ({ ...current, conteudo: event.target.value }))}
+                  placeholder="Escreva sua mensagem"
+                  rows="7"
+                />
+                <button className="gradient-button">Publicar</button>
               </form>
-
-              {profilesLoading && <p className="profiles-empty">Buscando perfis...</p>}
-
-              {!profilesLoading && profiles.map((profile) => (
-                <article className="profile-card" key={profile.id}>
-                  <button className="profile-main" onClick={() => openProfile(profile)}>
-                    <span>{profile.nome.slice(0, 1).toUpperCase()}</span>
-                    <strong>{profile.nome}</strong>
-                    <small>{profile.email}</small>
-                  </button>
-                  <button className={profile.seguindo ? 'outline-button' : 'gradient-button'} onClick={() => toggleFollow(profile)}>
-                    {profile.seguindo ? 'Seguindo' : 'Seguir'}
-                  </button>
-                </article>
-              ))}
-
-              {!profilesLoading && profiles.length === 0 && (
-                <p className="profiles-empty">Nenhum perfil encontrado.</p>
-              )}
             </>
           ) : (
             <section className="status">
-              Entre na sua conta para buscar perfis e seguir pessoas.
+              Entre na sua conta para criar uma publicação.
+              <button className="gradient-button inline-action" onClick={() => setModalMode('login')}>Entrar</button>
             </section>
           )}
         </section>
       )}
 
-      {loading && view !== 'perfis' && <section className="status">Carregando posts...</section>}
+      {tab === 'pesquisar' && (
+        <section className="search-page">
+          <form onSubmit={runSearch} className="profile-search">
+            <Search size={19} />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Pesquisar perfil ou publicação"
+            />
+            <button>Buscar</button>
+          </form>
 
-      {!loading && error && (
-        <section className="error-panel">
-          <p>{error}</p>
-          <button onClick={() => loadPosts()}>Tentar novamente</button>
-        </section>
-      )}
+          {searchLoading && <p className="profiles-empty">Pesquisando...</p>}
 
-      {!loading && !error && view !== 'perfis' && (
-        <section className="feed">
-          {filteredPosts.map((post) => (
-            <article key={post.id} className="post">
-              <div>
-                <span>{categoryLabels[post.categoria] || 'Publicação'}</span>
-                <time>{new Date(post.createdAt).toLocaleDateString('pt-BR')}</time>
+          {!searchLoading && (
+            <>
+              <div className="section-title">
+                <UserPlus size={18} />
+                <h2>Perfis</h2>
               </div>
-              <h2>{post.titulo}</h2>
-              <p>{post.conteudo}</p>
-              <footer>
-                {post.autorId ? (
-                  <button onClick={() => openProfile({ id: post.autorId, nome: post.autorNome })}>{post.autorNome}</button>
-                ) : (
-                  post.autorNome
-                )}
-              </footer>
-            </article>
-          ))}
+              <div className="profiles-list">
+                {searchProfiles.map(renderProfileCard)}
+                {searchProfiles.length === 0 && <p className="profiles-empty">Nenhum perfil encontrado.</p>}
+              </div>
 
-          {filteredPosts.length === 0 && (
+              <div className="section-title">
+                <MessageCircle size={18} />
+                <h2>Publicações</h2>
+              </div>
+              <div className="feed search-feed">
+                {searchPosts.map(renderPost)}
+                {searchPosts.length === 0 && <p className="profiles-empty">Nenhuma publicação encontrada.</p>}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {tab === 'perfil' && (
+        <section className="profile-page">
+          {user ? (
+            <>
+              <div className="profile-summary">
+                <span>{user.nome.slice(0, 1).toUpperCase()}</span>
+                <div>
+                  <h2>{user.nome}</h2>
+                  <p>{user.email}</p>
+                  <small>{(user.seguindoIds || []).length} perfil(is) seguindo</small>
+                </div>
+              </div>
+              <button className="outline-button" onClick={() => openProfile(user)}>Ver minhas publicações</button>
+              <button className="outline-button" onClick={() => updateUser(null)}>Sair da conta</button>
+            </>
+          ) : (
             <section className="status">
-              {view === 'seguindo' ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Nenhuma publicação nessa categoria ainda.'}
+              Entre para ver seu perfil, seguir pessoas e criar publicações.
+              <button className="gradient-button inline-action" onClick={() => setModalMode('login')}>Entrar</button>
             </section>
           )}
         </section>
       )}
+
+      <nav className="bottom-nav" aria-label="Menu principal">
+        <button className={tab === 'inicio' ? 'active' : ''} onClick={() => setTab('inicio')}>
+          <Home size={21} />
+          <span>Início</span>
+        </button>
+        <button className={tab === 'criar' ? 'active' : ''} onClick={() => setTab('criar')}>
+          <PlusCircle size={21} />
+          <span>Criar</span>
+        </button>
+        <button className={tab === 'pesquisar' ? 'active' : ''} onClick={() => { setTab('pesquisar'); if (!searchPosts.length && !searchProfiles.length) runSearch(); }}>
+          <Search size={21} />
+          <span>Pesquisar</span>
+        </button>
+        <button className={tab === 'perfil' ? 'active' : ''} onClick={() => setTab('perfil')}>
+          <User size={21} />
+          <span>Perfil</span>
+        </button>
+      </nav>
 
       {modalMode && (
         <AuthModal

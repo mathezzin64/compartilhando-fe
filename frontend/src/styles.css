@@ -34,7 +34,35 @@ button:not(:disabled):hover {
 .app-shell {
   min-height: 100svh;
   background: linear-gradient(135deg, #fbf7ff 0%, #eef6ff 100%);
-  padding-bottom: 56px;
+  padding-bottom: 96px;
+}
+
+.pull-refresh {
+  height: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  color: #7d1abd;
+  font-size: 13px;
+  font-weight: 800;
+  transition: height 0.18s ease;
+}
+
+.pull-refresh.visible {
+  min-height: 38px;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .topbar {
@@ -167,6 +195,13 @@ button:not(:disabled):hover {
   border: 1px solid #eadff8;
   border-radius: 14px;
   box-shadow: 0 4px 12px rgba(82, 57, 113, 0.14);
+}
+
+.page-panel,
+.search-page,
+.profile-page {
+  max-width: 640px;
+  margin: 24px auto 0;
 }
 
 .filter-panel {
@@ -309,7 +344,8 @@ button:not(:disabled):hover {
 }
 
 .feed,
-.profiles-panel {
+.profiles-panel,
+.profiles-list {
   max-width: 640px;
   margin: 24px auto 0;
   display: grid;
@@ -322,6 +358,12 @@ button:not(:disabled):hover {
   border-radius: 14px;
   padding: 16px;
   box-shadow: 0 4px 12px rgba(82, 57, 113, 0.14);
+}
+
+.search-page {
+  display: grid;
+  gap: 16px;
+  padding: 0 14px;
 }
 
 .profile-search {
@@ -417,6 +459,71 @@ button:not(:disabled):hover {
   margin: 10px 0 0;
   color: #5b6678;
   text-align: center;
+}
+
+.section-title {
+  max-width: 640px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5b217f;
+}
+
+.section-title h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.search-feed {
+  margin-top: 0;
+}
+
+.profile-page {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #eadff8;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(82, 57, 113, 0.14);
+}
+
+.profile-summary {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+}
+
+.profile-summary > span {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #a941f6 0%, #f23391 100%);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.profile-summary h2 {
+  margin: 0;
+  color: #361054;
+  font-size: 20px;
+}
+
+.profile-summary p,
+.profile-summary small {
+  display: block;
+  margin: 3px 0 0;
+  color: #7b6a91;
+  overflow-wrap: anywhere;
+}
+
+.inline-action {
+  display: block;
+  margin: 14px auto 0;
 }
 
 .post {
@@ -557,6 +664,46 @@ button:not(:disabled):hover {
   cursor: pointer;
 }
 
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  z-index: 12;
+  width: min(620px, calc(100% - 24px));
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 7px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #eadff8;
+  border-radius: 18px;
+  box-shadow: 0 14px 34px rgba(59, 28, 83, 0.2);
+  transform: translateX(-50%);
+  backdrop-filter: blur(16px);
+}
+
+.bottom-nav button {
+  min-width: 0;
+  min-height: 50px;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 13px;
+  color: #6b5d7a;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bottom-nav button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #a941f6 0%, #f23391 100%);
+  box-shadow: 0 8px 18px rgba(185, 54, 220, 0.22);
+}
+
 @media (max-width: 720px) {
   .topbar {
     padding: 0 16px;
@@ -579,7 +726,8 @@ button:not(:disabled):hover {
   .compose,
   .error-panel,
   .feed,
-  .status {
+  .status,
+  .profile-page {
     margin-left: 14px;
     margin-right: 14px;
   }
@@ -605,5 +753,15 @@ button:not(:disabled):hover {
 
   .modal {
     padding: 30px 22px 25px;
+  }
+
+  .bottom-nav {
+    bottom: 10px;
+    width: calc(100% - 18px);
+    border-radius: 16px;
+  }
+
+  .bottom-nav button span {
+    font-size: 11px;
   }
 }
