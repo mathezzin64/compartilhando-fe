@@ -84,31 +84,31 @@ async function seedDatabase() {
       categoria: 'versiculos',
       titulo: 'Um lembrete para hoje',
       conteudo: 'O Senhor é a minha força e o meu escudo; nele confiou o meu coração.',
-      autorNome: 'Equipe Compartilhando Fé'
+      autorNome: 'Equipe Revigório de Fé'
     },
     {
       id: nextId() + 2,
       categoria: 'testemunhos',
       titulo: 'Gratidão que fortalece',
       conteudo: 'Compartilhar o que Deus tem feito também anima quem está precisando continuar firme.',
-      autorNome: 'Equipe Compartilhando Fé'
+      autorNome: 'Equipe Revigório de Fé'
     },
     {
       id: nextId() + 3,
       categoria: 'oracoes',
       titulo: 'Pedido de oração',
       conteudo: 'Vamos orar pelas famílias, pelos professores e por cada aluno que precisa de direção.',
-      autorNome: 'Equipe Compartilhando Fé'
+      autorNome: 'Equipe Revigório de Fé'
     }
   ]);
 }
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', app: 'COMPARTILHANDO FÉ' });
+  res.json({ status: 'ok', app: 'REVIGÓRIO DE FÉ' });
 });
 
 app.get('/', (req, res) => {
-  res.send('Backend COMPARTILHANDO FÉ rodando com MongoDB.');
+  res.send('Backend REVIGÓRIO DE FÉ rodando com MongoDB.');
 });
 
 app.post('/auth/register', async (req, res, next) => {
@@ -365,9 +365,9 @@ async function start() {
   try {
     await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
     await seedDatabase();
-    console.log('MongoDB conectado ao COMPARTILHANDO FÉ.');
+    console.log('MongoDB conectado ao REVIGÓRIO DE FÉ.');
     app.listen(PORT, () => {
-      console.log(`Backend COMPARTILHANDO FÉ rodando na porta ${PORT}`);
+      console.log(`Backend REVIGÓRIO DE FÉ rodando na porta ${PORT}`);
     });
   } catch (error) {
     console.error('Erro ao conectar no MongoDB:', error.message);

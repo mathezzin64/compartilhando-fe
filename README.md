@@ -1,4 +1,4 @@
-# COMPARTILHANDO FÉ
+# REVIGÓRIO DE FÉ
 
 Aplicativo independente para compartilhar versículos, experiências, testemunhos e pedidos de oração.
 
@@ -43,7 +43,7 @@ Passos:
 
 1. Publique este projeto em um repositório GitHub próprio.
 2. No Render, clique em **New +** e escolha **Blueprint**.
-3. Selecione o repositório do **COMPARTILHANDO FÉ**.
+3. Selecione o repositório do **REVIGÓRIO DE FÉ**.
 4. Quando o Render pedir variáveis secretas, preencha `MONGODB_URI`.
 5. Confirme a criação dos serviços.
 

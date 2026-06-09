@@ -316,12 +316,12 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="Compartilhando Fé">
+        <a className="brand" href="/" aria-label="Revigório de Fé">
           <span className="logo">
             <Heart size={26} fill="currentColor" />
           </span>
           <span>
-            <strong>COMPARTILHANDO F&Eacute;</strong>
+            <strong>REVIG&Oacute;RIO DE F&Eacute;</strong>
             <small>Conectando corações</small>
           </span>
         </a>
@@ -342,7 +342,7 @@ function App() {
       <section className="hero">
         <div>
           <p>Compartilhe versículos, experiências, testemunhos e pedidos de oração.</p>
-          <h1>COMPARTILHANDO F&Eacute;</h1>
+          <h1>REVIG&Oacute;RIO DE F&Eacute;</h1>
         </div>
         <div className="search-pill">
           <Search size={20} />
