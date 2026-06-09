@@ -670,7 +670,11 @@ button:not(:disabled):hover {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 7px 10px;
   color: #d92b55;
+  background: #fff0f4;
+  border: 1px solid #ffd0dc;
+  border-radius: 9px;
 }
 
 .modal-backdrop {

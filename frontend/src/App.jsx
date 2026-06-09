@@ -385,7 +385,7 @@ function App() {
   };
 
   const deletePost = async (post) => {
-    if (!user || post.autorId !== user.id) return;
+    if (!user || Number(post.autorId) !== Number(user.id)) return;
     if (!window.confirm('Excluir esta publicação?')) return;
 
     try {
@@ -498,7 +498,7 @@ function App() {
     </span>
   );
 
-  const renderPost = (post) => (
+  const renderPost = (post, options = {}) => (
     <article key={post.id} className="post">
       <div>
         <span>{categoryLabels[post.categoria] || 'Publicação'}</span>
@@ -512,10 +512,10 @@ function App() {
         ) : (
           post.autorNome
         )}
-        {user && post.autorId === user.id && (
+        {user && (Number(post.autorId) === Number(user.id) || options.allowDelete) && (
           <button className="delete-post" onClick={() => deletePost(post)}>
             <Trash2 size={16} />
-            Excluir
+            Excluir post
           </button>
         )}
       </footer>
@@ -748,7 +748,7 @@ function App() {
               </div>
               <div className="profile-posts">
                 {profileLoading && <section className="status compact-status">Carregando posts...</section>}
-                {!profileLoading && profilePosts.map(renderPost)}
+                {!profileLoading && profilePosts.map((post) => renderPost(post, { allowDelete: isOwnProfile }))}
                 {!profileLoading && profilePosts.length === 0 && (
                   <section className="status compact-status">Nenhuma publicação postada ainda.</section>
                 )}
