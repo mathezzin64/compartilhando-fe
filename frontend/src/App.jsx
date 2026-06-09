@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
+  Camera,
   HandHeart,
   Heart,
   Home,
@@ -12,6 +13,7 @@ import {
   PlusCircle,
   RefreshCw,
   Search,
+  Trash2,
   User,
   UserPlus,
   Users,
@@ -151,7 +153,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 
 function App() {
   const [tab, setTab] = useState('inicio');
-  const [feedMode, setFeedMode] = useState('todos');
+  const [feedMode, setFeedMode] = useState('seguindo');
   const [category, setCategory] = useState('todas');
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState([]);
@@ -180,9 +182,8 @@ function App() {
   });
 
   const filteredPosts = useMemo(() => {
-    if (category === 'todas') return posts;
-    return posts.filter((post) => post.categoria === category);
-  }, [category, posts]);
+    return posts;
+  }, [posts]);
 
   const updateUser = (nextUser) => {
     setUser(nextUser ? { ...nextUser, seguindoIds: nextUser.seguindoIds || [] } : null);
@@ -241,7 +242,11 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        setProfileDetails(data.usuario);
+        const perfil = {
+          ...data.usuario,
+          seguindo: profile.seguindo ?? selectedProfile?.seguindo ?? (user?.seguindoIds || []).includes(data.usuario.id)
+        };
+        setProfileDetails(perfil);
         setProfilePosts(data.posts || []);
       } else {
         setProfileDetails(profile);
@@ -255,16 +260,18 @@ function App() {
     }
   };
 
-  const runSearch = async (event) => {
+  const runSearch = async (event, termOverride) => {
     event?.preventDefault();
+    const termoBusca = typeof termOverride === 'string' ? termOverride : searchTerm;
+    if (typeof termOverride === 'string') setSearchTerm(termOverride);
     setSearchLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
-      if (searchTerm.trim()) params.set('q', searchTerm.trim());
+      if (termoBusca.trim()) params.set('q', termoBusca.trim());
       const [postsResponse, profilesResult] = await Promise.all([
         fetch(`${API_BASE_URL}/posts?${params.toString()}`),
-        loadProfiles(searchTerm)
+        loadProfiles(termoBusca)
       ]);
       const postsData = await postsResponse.json();
       setSearchPosts(postsResponse.ok ? postsData : []);
@@ -281,14 +288,14 @@ function App() {
   const refreshCurrent = async () => {
     setIsRefreshing(true);
     if (tab === 'pesquisar') await runSearch();
-    else if (tab === 'perfil' && user) await loadProfilePage(user);
-    else await loadPosts(feedMode, selectedProfile);
+    else if (tab === 'perfil' && (selectedProfile || user)) await loadProfilePage(selectedProfile || user);
+    else await loadPosts('seguindo', null);
     setIsRefreshing(false);
   };
 
   useEffect(() => {
-    loadPosts('todos', null);
-  }, []);
+    loadPosts('seguindo', null);
+  }, [user?.id]);
 
   useEffect(() => {
     if (user) {
@@ -301,8 +308,8 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    if (tab === 'perfil' && user) loadProfilePage(user);
-  }, [tab, user?.id]);
+    if (tab === 'perfil' && (selectedProfile || user)) loadProfilePage(selectedProfile || user);
+  }, [tab, selectedProfile?.id, user?.id]);
 
   const handleTouchStart = (event) => {
     if (window.scrollY === 0) touchStartY.current = event.touches[0].clientY;
@@ -329,9 +336,79 @@ function App() {
 
   const openProfile = async (profile) => {
     setSelectedProfile(profile);
-    setFeedMode('perfil');
-    setTab('inicio');
-    await loadPosts('perfil', profile);
+    setTab('perfil');
+    await loadProfilePage(profile);
+  };
+
+  const openSearch = async (event) => {
+    event.preventDefault();
+    setTab('pesquisar');
+    await runSearch(event, searchTerm);
+  };
+
+  const handleProfilePhotoChange = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/') || file.size > 1200000) {
+      setError('Escolha uma imagem menor para o perfil.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setProfileLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/usuarios/${user.id}/foto`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuarioId: user.id, fotoPerfil: reader.result })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || 'Não foi possível atualizar a foto.');
+          return;
+        }
+
+        updateUser(data.usuario);
+        setProfileDetails((current) => ({ ...(current || data.usuario), fotoPerfil: data.usuario.fotoPerfil }));
+        setError('');
+      } catch {
+        setError('Não foi possível atualizar a foto agora.');
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const deletePost = async (post) => {
+    if (!user || post.autorId !== user.id) return;
+    if (!window.confirm('Excluir esta publicação?')) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/posts/${post.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autorId: user.id })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Não foi possível excluir a publicação.');
+        return;
+      }
+
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+      setSearchPosts((current) => current.filter((item) => item.id !== post.id));
+      setProfilePosts((current) => current.filter((item) => item.id !== post.id));
+      setProfileDetails((current) => current ? { ...current, postsCount: Math.max(0, (current.postsCount || 1) - 1) } : current);
+      setError('');
+    } catch {
+      setError('Não foi possível excluir a publicação agora.');
+    }
   };
 
   const publishPost = async (event) => {
@@ -359,8 +436,9 @@ function App() {
       }
       setPosts((current) => [data.post, ...current]);
       setNewPost({ categoria: 'versiculos', titulo: '', conteudo: '' });
-      setTab('inicio');
-      setFeedMode('todos');
+      setSelectedProfile(null);
+      setTab('perfil');
+      loadProfilePage(user);
       setError('');
     } catch {
       setError('Não foi possível publicar agora.');
@@ -398,8 +476,27 @@ function App() {
     ));
     setProfiles(updateList);
     setSearchProfiles(updateList);
-    if (tab === 'perfil' && user) loadProfilePage(user);
+    setProfileDetails((current) => current && current.id === profile.id
+      ? {
+          ...current,
+          seguindo: !seguindo,
+          seguidoresCount: Math.max(0, (current.seguidoresCount || 0) + (seguindo ? -1 : 1))
+        }
+      : current);
+    if (selectedProfile?.id === profile.id) {
+      setSelectedProfile((current) => current ? { ...current, seguindo: !seguindo } : current);
+    }
   };
+
+  const renderAvatar = (profile, className = '') => (
+    <span className={className}>
+      {profile?.fotoPerfil ? (
+        <img src={profile.fotoPerfil} alt="" />
+      ) : (
+        profile?.nome?.slice(0, 1).toUpperCase() || 'R'
+      )}
+    </span>
+  );
 
   const renderPost = (post) => (
     <article key={post.id} className="post">
@@ -415,6 +512,12 @@ function App() {
         ) : (
           post.autorNome
         )}
+        {user && post.autorId === user.id && (
+          <button className="delete-post" onClick={() => deletePost(post)}>
+            <Trash2 size={16} />
+            Excluir
+          </button>
+        )}
       </footer>
     </article>
   );
@@ -422,7 +525,7 @@ function App() {
   const renderProfileCard = (profile) => (
     <article className="profile-card" key={profile.id}>
       <button className="profile-main" onClick={() => openProfile(profile)}>
-        <span>{profile.nome.slice(0, 1).toUpperCase()}</span>
+        {renderAvatar(profile)}
         <strong>{profile.nome}</strong>
         <small>
           {profile.seguidoresCount || 0} seguidores · {profile.seguindoCount || 0} seguindo · {profile.postsCount || 0} posts
@@ -433,6 +536,10 @@ function App() {
       </button>
     </article>
   );
+
+  const profileTarget = selectedProfile || user;
+  const activeProfile = profileDetails?.id === profileTarget?.id ? profileDetails : profileTarget;
+  const isOwnProfile = Boolean(user && activeProfile?.id === user.id);
 
   return (
     <main
@@ -449,7 +556,7 @@ function App() {
       <header className="topbar">
         <a className="brand" href="/" aria-label="Revigório de Fé">
           <span className="logo">
-            <Heart size={26} fill="currentColor" />
+            <Heart size={26} />
           </span>
           <span>
             <strong>REVIG&Oacute;RIO DE F&Eacute;</strong>
@@ -459,7 +566,6 @@ function App() {
 
         {user ? (
           <div className="user-actions">
-            <span>{user.nome}</span>
             <button onClick={() => updateUser(null)}>Sair</button>
           </div>
         ) : (
@@ -483,41 +589,16 @@ function App() {
 
       {tab === 'inicio' && (
         <>
-          <section className="filter-panel">
-            <div className="view-tabs">
-              <button className={feedMode === 'todos' ? 'active' : ''} onClick={() => changeFeedMode('todos')}>
-                <Home size={18} />
-                Todos
-              </button>
-              <button className={feedMode === 'seguindo' ? 'active' : ''} onClick={() => changeFeedMode('seguindo')}>
-                <Users size={18} />
-                Seguindo
-              </button>
-            </div>
-
-            <p>Filtrar por categoria</p>
-            <div className="categories">
-              {categories.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    className={category === item.id ? 'active' : ''}
-                    onClick={() => setCategory(item.id)}
-                  >
-                    <Icon size={18} />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {feedMode === 'perfil' && selectedProfile && (
-              <div className="profile-heading">
-                <strong>{selectedProfile.nome}</strong>
-                <button onClick={() => changeFeedMode('todos')}>Voltar ao início</button>
-              </div>
-            )}
+          <section className="home-search-panel">
+            <form onSubmit={openSearch} className="profile-search">
+              <Search size={19} />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Pesquisar perfil ou publicação"
+              />
+              <button>Buscar</button>
+            </form>
           </section>
 
           {loading && <section className="status">Carregando posts...</section>}
@@ -532,7 +613,8 @@ function App() {
               {filteredPosts.map(renderPost)}
               {filteredPosts.length === 0 && (
                 <section className="status">
-                  {feedMode === 'seguindo' ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Nenhuma publicação nessa categoria ainda.'}
+                  {user ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Entre para ver as publicações dos perfis que você segue.'}
+                  {!user && <button className="gradient-button inline-action" onClick={() => setModalMode('login')}>Entrar</button>}
                 </section>
               )}
             </section>
@@ -620,19 +702,19 @@ function App() {
 
       {tab === 'perfil' && (
         <section className="profile-page">
-          {user ? (
+          {activeProfile ? (
             <>
               <div className="profile-summary">
-                <span>{user.nome.slice(0, 1).toUpperCase()}</span>
+                {renderAvatar(activeProfile, 'profile-photo')}
                 <div>
-                  <h2>{user.nome}</h2>
+                  <h2>{activeProfile.nome}</h2>
                   <div className="profile-stats">
                     <span>
                       <strong>{profileDetails?.seguidoresCount || 0}</strong>
                       seguidores
                     </span>
                     <span>
-                      <strong>{profileDetails?.seguindoCount ?? (user.seguindoIds || []).length}</strong>
+                      <strong>{profileDetails?.seguindoCount ?? (activeProfile.seguindoIds || []).length}</strong>
                       seguindo
                     </span>
                     <span>
@@ -642,6 +724,24 @@ function App() {
                   </div>
                 </div>
               </div>
+
+              <div className="profile-actions-row">
+                {isOwnProfile ? (
+                  <label className="outline-button photo-upload">
+                    <Camera size={17} />
+                    Foto de perfil
+                    <input type="file" accept="image/*" onChange={handleProfilePhotoChange} />
+                  </label>
+                ) : user ? (
+                  <button className={profileDetails?.seguindo ? 'outline-button' : 'gradient-button'} onClick={() => toggleFollow(profileDetails || activeProfile)}>
+                    {profileDetails?.seguindo ? 'Seguindo' : 'Seguir'}
+                  </button>
+                ) : (
+                  <button className="gradient-button" onClick={() => setModalMode('login')}>Entrar para seguir</button>
+                )}
+                {selectedProfile && <button className="outline-button" onClick={() => { setSelectedProfile(null); setTab('inicio'); }}>Voltar</button>}
+              </div>
+
               <div className="section-title">
                 <MessageCircle size={18} />
                 <h2>Posts publicados</h2>
@@ -653,7 +753,7 @@ function App() {
                   <section className="status compact-status">Nenhuma publicação postada ainda.</section>
                 )}
               </div>
-              <button className="outline-button" onClick={() => updateUser(null)}>Sair da conta</button>
+              {isOwnProfile && <button className="outline-button" onClick={() => updateUser(null)}>Sair da conta</button>}
             </>
           ) : (
             <section className="status">
@@ -677,7 +777,7 @@ function App() {
           <Search size={21} />
           <span>Pesquisar</span>
         </button>
-        <button className={tab === 'perfil' ? 'active' : ''} onClick={() => setTab('perfil')}>
+        <button className={tab === 'perfil' && !selectedProfile ? 'active' : ''} onClick={() => { setSelectedProfile(null); setTab('perfil'); }}>
           <User size={21} />
           <span>Perfil</span>
         </button>
@@ -696,3 +796,6 @@ function App() {
 }
 
 export default App;
+
+
+

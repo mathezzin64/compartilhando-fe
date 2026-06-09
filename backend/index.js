@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 const crypto = require('crypto');
 const cors = require('cors');
@@ -21,7 +21,7 @@ if (DNS_SERVERS) {
 }
 
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 const baseOptions = {
   versionKey: false,
@@ -33,6 +33,7 @@ const Usuario = mongoose.model('Usuario', new mongoose.Schema({
   nome: { type: String, required: true },
   email: { type: String, required: true, unique: true, index: true },
   senhaHash: { type: String, required: true },
+  fotoPerfil: { type: String, default: '' },
   seguindoIds: { type: [Number], default: [] }
 }, baseOptions));
 
@@ -57,7 +58,7 @@ const hashSenha = (senha) => crypto.createHash('sha256').update(String(senha)).d
 const serializarUsuario = (usuario) => ({
   id: usuario.id,
   nome: usuario.nome,
-  email: usuario.email,
+  fotoPerfil: usuario.fotoPerfil || '',
   seguindoIds: Array.isArray(usuario.seguindoIds) ? usuario.seguindoIds : []
 });
 const montarPerfilPublico = async (usuario) => {
@@ -70,6 +71,7 @@ const montarPerfilPublico = async (usuario) => {
   return {
     id: usuario.id,
     nome: usuario.nome,
+    fotoPerfil: usuario.fotoPerfil || '',
     seguindoIds,
     seguidoresCount,
     seguindoCount: seguindoIds.length,
@@ -194,7 +196,7 @@ app.get('/usuarios', async (req, res, next) => {
       : {};
 
     const [usuarios, viewer] = await Promise.all([
-      Usuario.find(filtro).select('id nome seguindoIds createdAt').sort({ nome: 1 }).limit(25).lean(),
+      Usuario.find(filtro).select('id nome fotoPerfil seguindoIds createdAt').sort({ nome: 1 }).limit(25).lean(),
       Number.isFinite(viewerId) ? Usuario.findOne({ id: viewerId }).select('id seguindoIds').lean() : null
     ]);
 
@@ -273,6 +275,39 @@ app.delete('/usuarios/:id/seguir', async (req, res, next) => {
   }
 });
 
+app.patch('/usuarios/:id/foto', async (req, res, next) => {
+  try {
+    const usuarioId = toNumber(req.params.id);
+    const solicitanteId = toNumber(req.body.usuarioId);
+    const fotoPerfil = String(req.body.fotoPerfil || '').trim();
+
+    if (!Number.isFinite(usuarioId) || usuarioId !== solicitanteId) {
+      return res.status(403).json({ error: 'Você só pode alterar a foto do seu próprio perfil' });
+    }
+
+    if (fotoPerfil && (!fotoPerfil.startsWith('data:image/') || fotoPerfil.length > 1800000)) {
+      return res.status(400).json({ error: 'Envie uma imagem menor para o perfil' });
+    }
+
+    const usuario = await Usuario.findOneAndUpdate(
+      { id: usuarioId },
+      { fotoPerfil },
+      { new: true }
+    ).lean();
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Perfil não encontrado' });
+    }
+
+    res.json({
+      message: 'Foto de perfil atualizada',
+      usuario: serializarUsuario(usuario)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/usuarios/:id/posts', async (req, res, next) => {
   try {
     const autorId = toNumber(req.params.id);
@@ -282,7 +317,7 @@ app.get('/usuarios/:id/posts', async (req, res, next) => {
       return res.status(400).json({ error: 'Perfil inválido' });
     }
 
-    const usuario = await Usuario.findOne({ id: autorId }).select('id nome seguindoIds').lean();
+    const usuario = await Usuario.findOne({ id: autorId }).select('id nome fotoPerfil seguindoIds').lean();
     if (!usuario) {
       return res.status(404).json({ error: 'Perfil não encontrado' });
     }
@@ -382,6 +417,31 @@ app.post('/posts', async (req, res, next) => {
   }
 });
 
+app.delete('/posts/:id', async (req, res, next) => {
+  try {
+    const postId = toNumber(req.params.id);
+    const autorId = toNumber(req.body.autorId);
+
+    if (!Number.isFinite(postId) || !Number.isFinite(autorId)) {
+      return res.status(400).json({ error: 'Publicação inválida' });
+    }
+
+    const post = await Post.findOne({ id: postId });
+    if (!post) {
+      return res.status(404).json({ error: 'Publicação não encontrada' });
+    }
+
+    if (post.autorId !== autorId) {
+      return res.status(403).json({ error: 'Você só pode excluir suas próprias publicações' });
+    }
+
+    await post.deleteOne();
+    res.json({ message: 'Publicação excluída com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use((error, req, res, next) => {
   console.error(error);
   res.status(500).json({ error: 'Erro interno no servidor' });
@@ -402,3 +462,5 @@ async function start() {
 }
 
 start();
+
+
