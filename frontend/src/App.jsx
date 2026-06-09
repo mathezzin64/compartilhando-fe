@@ -159,6 +159,9 @@ function App() {
   const [searchProfiles, setSearchProfiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [profileDetails, setProfileDetails] = useState(null);
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState('');
@@ -229,6 +232,29 @@ function App() {
     }
   };
 
+  const loadProfilePage = async (profile = user) => {
+    if (!profile) return;
+
+    setProfileLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/usuarios/${profile.id}/posts`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setProfileDetails(data.usuario);
+        setProfilePosts(data.posts || []);
+      } else {
+        setProfileDetails(profile);
+        setProfilePosts([]);
+      }
+    } catch {
+      setProfileDetails(profile);
+      setProfilePosts([]);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const runSearch = async (event) => {
     event?.preventDefault();
     setSearchLoading(true);
@@ -255,7 +281,7 @@ function App() {
   const refreshCurrent = async () => {
     setIsRefreshing(true);
     if (tab === 'pesquisar') await runSearch();
-    else if (tab === 'perfil' && user) await loadPosts('perfil', user);
+    else if (tab === 'perfil' && user) await loadProfilePage(user);
     else await loadPosts(feedMode, selectedProfile);
     setIsRefreshing(false);
   };
@@ -273,6 +299,10 @@ function App() {
       localStorage.removeItem('compartilhando-fe-user');
     }
   }, [user]);
+
+  useEffect(() => {
+    if (tab === 'perfil' && user) loadProfilePage(user);
+  }, [tab, user?.id]);
 
   const handleTouchStart = (event) => {
     if (window.scrollY === 0) touchStartY.current = event.touches[0].clientY;
@@ -358,10 +388,17 @@ function App() {
 
     updateUser(data.usuario);
     const updateList = (items) => items.map((item) => (
-      item.id === profile.id ? { ...item, seguindo: !seguindo } : item
+      item.id === profile.id
+        ? {
+            ...item,
+            seguindo: !seguindo,
+            seguidoresCount: Math.max(0, (item.seguidoresCount || 0) + (seguindo ? -1 : 1))
+          }
+        : item
     ));
     setProfiles(updateList);
     setSearchProfiles(updateList);
+    if (tab === 'perfil' && user) loadProfilePage(user);
   };
 
   const renderPost = (post) => (
@@ -387,7 +424,9 @@ function App() {
       <button className="profile-main" onClick={() => openProfile(profile)}>
         <span>{profile.nome.slice(0, 1).toUpperCase()}</span>
         <strong>{profile.nome}</strong>
-        <small>{profile.email}</small>
+        <small>
+          {profile.seguidoresCount || 0} seguidores · {profile.seguindoCount || 0} seguindo · {profile.postsCount || 0} posts
+        </small>
       </button>
       <button className={profile.seguindo ? 'outline-button' : 'gradient-button'} onClick={() => toggleFollow(profile)}>
         {profile.seguindo ? 'Seguindo' : 'Seguir'}
@@ -587,11 +626,33 @@ function App() {
                 <span>{user.nome.slice(0, 1).toUpperCase()}</span>
                 <div>
                   <h2>{user.nome}</h2>
-                  <p>{user.email}</p>
-                  <small>{(user.seguindoIds || []).length} perfil(is) seguindo</small>
+                  <div className="profile-stats">
+                    <span>
+                      <strong>{profileDetails?.seguidoresCount || 0}</strong>
+                      seguidores
+                    </span>
+                    <span>
+                      <strong>{profileDetails?.seguindoCount ?? (user.seguindoIds || []).length}</strong>
+                      seguindo
+                    </span>
+                    <span>
+                      <strong>{profileDetails?.postsCount ?? profilePosts.length}</strong>
+                      posts
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button className="outline-button" onClick={() => openProfile(user)}>Ver minhas publicações</button>
+              <div className="section-title">
+                <MessageCircle size={18} />
+                <h2>Posts publicados</h2>
+              </div>
+              <div className="profile-posts">
+                {profileLoading && <section className="status compact-status">Carregando posts...</section>}
+                {!profileLoading && profilePosts.map(renderPost)}
+                {!profileLoading && profilePosts.length === 0 && (
+                  <section className="status compact-status">Nenhuma publicação postada ainda.</section>
+                )}
+              </div>
               <button className="outline-button" onClick={() => updateUser(null)}>Sair da conta</button>
             </>
           ) : (

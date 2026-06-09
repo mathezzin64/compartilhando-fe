@@ -417,7 +417,7 @@ button:not(:disabled):hover {
   grid-template-columns: 42px minmax(0, 1fr);
   grid-template-areas:
     "avatar name"
-    "avatar email";
+    "avatar stats";
   column-gap: 11px;
   align-items: center;
   border: 0;
@@ -448,7 +448,7 @@ button:not(:disabled):hover {
 }
 
 .profile-main small {
-  grid-area: email;
+  grid-area: stats;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -513,12 +513,39 @@ button:not(:disabled):hover {
   font-size: 20px;
 }
 
-.profile-summary p,
-.profile-summary small {
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.profile-stats span {
+  min-width: 0;
+  padding: 10px 8px;
+  text-align: center;
+  color: #6b5d7a;
+  background: #faf8ff;
+  border: 1px solid #eadff8;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.profile-stats strong {
   display: block;
-  margin: 3px 0 0;
-  color: #7b6a91;
-  overflow-wrap: anywhere;
+  color: #361054;
+  font-size: 18px;
+}
+
+.profile-posts {
+  display: grid;
+  gap: 14px;
+}
+
+.compact-status {
+  margin: 0;
+  max-width: none;
+  box-shadow: none;
 }
 
 .inline-action {

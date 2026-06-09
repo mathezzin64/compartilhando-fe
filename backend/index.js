@@ -60,6 +60,22 @@ const serializarUsuario = (usuario) => ({
   email: usuario.email,
   seguindoIds: Array.isArray(usuario.seguindoIds) ? usuario.seguindoIds : []
 });
+const montarPerfilPublico = async (usuario) => {
+  const seguindoIds = Array.isArray(usuario.seguindoIds) ? usuario.seguindoIds : [];
+  const [seguidoresCount, postsCount] = await Promise.all([
+    Usuario.countDocuments({ seguindoIds: usuario.id }),
+    Post.countDocuments({ autorId: usuario.id })
+  ]);
+
+  return {
+    id: usuario.id,
+    nome: usuario.nome,
+    seguindoIds,
+    seguidoresCount,
+    seguindoCount: seguindoIds.length,
+    postsCount
+  };
+};
 const criarFiltroPosts = ({ categoria, autorId }) => {
   const filtro = {};
 
@@ -178,20 +194,20 @@ app.get('/usuarios', async (req, res, next) => {
       : {};
 
     const [usuarios, viewer] = await Promise.all([
-      Usuario.find(filtro).select('id nome email seguindoIds createdAt').sort({ nome: 1 }).limit(25).lean(),
+      Usuario.find(filtro).select('id nome seguindoIds createdAt').sort({ nome: 1 }).limit(25).lean(),
       Number.isFinite(viewerId) ? Usuario.findOne({ id: viewerId }).select('id seguindoIds').lean() : null
     ]);
 
     const seguindoIds = new Set(viewer?.seguindoIds || []);
-    res.json(usuarios
+    const perfis = await Promise.all(usuarios
       .filter((usuario) => usuario.id !== viewerId)
-      .map((usuario) => ({
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
+      .map(async (usuario) => ({
+        ...(await montarPerfilPublico(usuario)),
         seguindo: seguindoIds.has(usuario.id),
         criadoEm: usuario.createdAt
       })));
+
+    res.json(perfis);
   } catch (error) {
     next(error);
   }
@@ -266,13 +282,13 @@ app.get('/usuarios/:id/posts', async (req, res, next) => {
       return res.status(400).json({ error: 'Perfil inválido' });
     }
 
-    const usuario = await Usuario.findOne({ id: autorId }).select('id nome email').lean();
+    const usuario = await Usuario.findOne({ id: autorId }).select('id nome seguindoIds').lean();
     if (!usuario) {
       return res.status(404).json({ error: 'Perfil não encontrado' });
     }
 
     const posts = await Post.find(criarFiltroPosts({ categoria, autorId })).sort({ createdAt: -1 }).lean();
-    res.json({ usuario: serializarUsuario(usuario), posts });
+    res.json({ usuario: await montarPerfilPublico(usuario), posts });
   } catch (error) {
     next(error);
   }
