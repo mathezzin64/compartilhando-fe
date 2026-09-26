@@ -72,6 +72,10 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
         return;
       }
 
+      if (!/^[a-f0-9]{64}$/.test(data.token || '') || !data.usuario?.id) {
+        setError('O acesso à conta está sendo atualizado. Tente novamente em instantes.');
+        return;
+      }
       saveToken(data.token);
       onAuth(data.usuario);
       onClose();
@@ -832,5 +836,4 @@ function App() {
 }
 
 export default App;
-
 
