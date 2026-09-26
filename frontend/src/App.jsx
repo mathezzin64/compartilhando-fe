@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Brain,
   BookOpen,
   Camera,
   HandHeart,
@@ -20,6 +21,8 @@ import {
   X
 } from 'lucide-react';
 import API_BASE_URL from './api';
+import { apiFetch, readUser, saveToken, clearSession } from './session';
+import { HomePage, FaithPage, MindPage } from './Discovery';
 
 const categories = [
   { id: 'todas', label: 'Todas', icon: Heart },
@@ -57,7 +60,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
+      const response = await apiFetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -69,6 +72,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
         return;
       }
 
+      saveToken(data.token);
       onAuth(data.usuario);
       onClose();
     } catch {
@@ -80,12 +84,12 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 
   return (
     <div className="modal-backdrop">
-      <section className="modal" role="dialog" aria-modal="true">
+      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="icon-button modal-close" onClick={onClose} aria-label="Fechar">
           <X size={22} />
         </button>
 
-        <h2>{isRegister ? 'Criar Conta' : 'Entrar'}</h2>
+        <h2 id="auth-title">{isRegister ? 'Criar Conta' : 'Entrar'}</h2>
         {error && <p className="form-error">{error}</p>}
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -131,7 +135,9 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
                 type="password"
                 value={form.senha}
                 onChange={handleChange}
-                placeholder="Mínimo 6 caracteres"
+                placeholder={isRegister ? "Entre 8 e 128 caracteres" : "Sua senha"}
+                minLength={isRegister ? 8 : undefined}
+                maxLength={128}
                 autoComplete={isRegister ? 'new-password' : 'current-password'}
                 disabled={loading}
               />
@@ -153,7 +159,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 
 function App() {
   const [tab, setTab] = useState('inicio');
-  const [feedMode, setFeedMode] = useState('seguindo');
+  const [feedMode, setFeedMode] = useState('todos');
   const [category, setCategory] = useState('todas');
   const [posts, setPosts] = useState([]);
   const [profiles, setProfiles] = useState([]);
@@ -165,16 +171,14 @@ function App() {
   const [profilePosts, setProfilePosts] = useState([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [publishing, setPublishing] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState('');
   const [modalMode, setModalMode] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const touchStartY = useRef(null);
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('revigorio-fe-user') || localStorage.getItem('compartilhando-fe-user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState(readUser);
   const [newPost, setNewPost] = useState({
     categoria: 'versiculos',
     titulo: '',
@@ -182,8 +186,44 @@ function App() {
   });
 
   const filteredPosts = useMemo(() => {
-    return posts;
-  }, [posts]);
+    return category === 'todas' ? posts : posts.filter(post => post.categoria === category);
+  }, [posts, category]);
+
+  const navigate = (target) => {
+    setSelectedProfile(null);
+    setTab(target);
+    setError('');
+    if (target === 'inicio') { setFeedMode('todos'); loadPosts('todos', null); }
+    window.scrollTo({ top: 0 });
+  };
+
+  const logout = async () => {
+    try {
+      const response = await apiFetch(API_BASE_URL + '/auth/logout', { method: 'POST' });
+      if (!response.ok && response.status !== 401) throw new Error();
+      clearSession();
+      updateUser(null);
+      setSelectedProfile(null);
+      setProfileDetails(null);
+      setProfilePosts([]);
+      setTab('inicio');
+    } catch { setError('Não foi possível encerrar a sessão. Tente novamente.'); }
+  };
+
+  useEffect(() => {
+    const expired = () => {
+      setUser(null);
+      setSelectedProfile(null);
+      setProfileDetails(null);
+      setProfilePosts([]);
+      setError('Sua sessão expirou. Entre novamente para publicar ou editar seu perfil.');
+    };
+    window.addEventListener('revigorio-session-expired', expired);
+    if (readUser()) apiFetch(API_BASE_URL + '/auth/me').then(async response => {
+      if (response.ok) updateUser((await response.json()).usuario);
+    }).catch(() => {});
+    return () => window.removeEventListener('revigorio-session-expired', expired);
+  }, []);
 
   const updateUser = (nextUser) => {
     setUser(nextUser ? { ...nextUser, seguindoIds: nextUser.seguindoIds || [] } : null);
@@ -204,7 +244,7 @@ function App() {
         return;
       }
 
-      const response = await fetch(buildPostUrl(mode, profile));
+      const response = await apiFetch(buildPostUrl(mode, profile));
       const data = await response.json();
       if (!response.ok) {
         setError(data.error || 'Não foi possível carregar os posts. Tente novamente.');
@@ -223,7 +263,7 @@ function App() {
       const params = new URLSearchParams();
       if (user) params.set('viewerId', String(user.id));
       if (term.trim()) params.set('q', term.trim());
-      const response = await fetch(`${API_BASE_URL}/usuarios?${params.toString()}`);
+      const response = await apiFetch(`${API_BASE_URL}/usuarios?${params.toString()}`);
       const data = await response.json();
       setProfiles(response.ok ? data : []);
       return response.ok ? data : [];
@@ -238,7 +278,7 @@ function App() {
 
     setProfileLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/usuarios/${profile.id}/posts`);
+      const response = await apiFetch(`${API_BASE_URL}/usuarios/${profile.id}/posts`);
       const data = await response.json();
 
       if (response.ok) {
@@ -270,7 +310,7 @@ function App() {
       const params = new URLSearchParams();
       if (termoBusca.trim()) params.set('q', termoBusca.trim());
       const [postsResponse, profilesResult] = await Promise.all([
-        fetch(`${API_BASE_URL}/posts?${params.toString()}`),
+        apiFetch(`${API_BASE_URL}/posts?${params.toString()}`),
         loadProfiles(termoBusca)
       ]);
       const postsData = await postsResponse.json();
@@ -289,12 +329,13 @@ function App() {
     setIsRefreshing(true);
     if (tab === 'pesquisar') await runSearch();
     else if (tab === 'perfil' && (selectedProfile || user)) await loadProfilePage(selectedProfile || user);
-    else await loadPosts('seguindo', null);
+    else await loadPosts(tab === 'inicio' ? 'todos' : feedMode, null);
     setIsRefreshing(false);
   };
 
   useEffect(() => {
-    loadPosts('seguindo', null);
+    setFeedMode('todos');
+    loadPosts('todos', null);
   }, [user?.id]);
 
   useEffect(() => {
@@ -330,7 +371,7 @@ function App() {
   const changeFeedMode = (mode) => {
     setFeedMode(mode);
     setSelectedProfile(null);
-    setTab('inicio');
+    setTab('comunidade');
     loadPosts(mode, null);
   };
 
@@ -360,7 +401,7 @@ function App() {
     reader.onload = async () => {
       setProfileLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/usuarios/${user.id}/foto`, {
+        const response = await apiFetch(`${API_BASE_URL}/usuarios/${user.id}/foto`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ usuarioId: user.id, fotoPerfil: reader.result })
@@ -389,7 +430,7 @@ function App() {
     if (!window.confirm('Excluir esta publicação?')) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/posts/${post.id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/posts/${post.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autorId: user.id })
@@ -413,14 +454,16 @@ function App() {
 
   const publishPost = async (event) => {
     event.preventDefault();
+    if (publishing) return;
     if (!user) {
       setModalMode('login');
       return;
     }
-    if (!newPost.titulo || !newPost.conteudo) return;
+    if (!newPost.titulo.trim() || !newPost.conteudo.trim()) return;
 
+    setPublishing(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/posts`, {
+      const response = await apiFetch(`${API_BASE_URL}/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -442,6 +485,8 @@ function App() {
       setError('');
     } catch {
       setError('Não foi possível publicar agora.');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -452,7 +497,8 @@ function App() {
     }
 
     const seguindo = profile.seguindo;
-    const response = await fetch(`${API_BASE_URL}/usuarios/${profile.id}/seguir`, {
+    try {
+    const response = await apiFetch(`${API_BASE_URL}/usuarios/${profile.id}/seguir`, {
       method: seguindo ? 'DELETE' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ seguidorId: user.id })
@@ -486,6 +532,7 @@ function App() {
     if (selectedProfile?.id === profile.id) {
       setSelectedProfile((current) => current ? { ...current, seguindo: !seguindo } : current);
     }
+    } catch { setError('Não foi possível atualizar o perfil. Tente novamente.'); }
   };
 
   const renderAvatar = (profile, className = '') => (
@@ -560,13 +607,13 @@ function App() {
           </span>
           <span>
             <strong>REVIG&Oacute;RIO DE F&Eacute;</strong>
-            <small>Conectando corações</small>
+            <small>Fé, conhecimento e acolhimento</small>
           </span>
         </a>
 
         {user ? (
           <div className="user-actions">
-            <button onClick={() => updateUser(null)}>Sair</button>
+            <button onClick={logout}>Sair</button>
           </div>
         ) : (
           <button className="login-button" onClick={() => setModalMode('login')}>
@@ -576,19 +623,14 @@ function App() {
         )}
       </header>
 
-      <section className="hero">
-        <div>
-          <p>Compartilhe versículos, experiências, testemunhos e pedidos de oração.</p>
-          <h1>REVIG&Oacute;RIO DE F&Eacute;</h1>
-        </div>
-        <div className="search-pill">
-          <Search size={20} />
-          <span>Comunidade de fé</span>
-        </div>
-      </section>
+      {error && <div className="global-error" role="alert">{error}<button onClick={() => setError('')} aria-label="Fechar aviso"><X size={18} /></button></div>}
+      {tab === 'inicio' && <HomePage user={user} navigate={navigate} posts={posts} renderPost={renderPost} loading={loading} />}
+      {tab === 'fe' && <FaithPage navigate={navigate} />}
+      {tab === 'mente' && <MindPage />}
 
-      {tab === 'inicio' && (
+      {tab === 'comunidade' && (
         <>
+          <div className="discovery-page community-intro"><div className="page-intro"><span className="eyebrow"><Users size={18} /> COMUNIDADE</span><h1>Juntos na caminhada</h1><p>Versículos, experiências, testemunhos e orações.</p></div><button className="gradient-button publish-action" onClick={() => navigate('criar')}><PlusCircle size={18} /> Criar publicação</button></div>
           <section className="home-search-panel">
             <form onSubmit={openSearch} className="profile-search">
               <Search size={19} />
@@ -601,6 +643,10 @@ function App() {
             </form>
           </section>
 
+          <section className="community-filters" aria-label="Filtrar publicações">
+            <div className="topic-buttons"><button aria-pressed={feedMode === 'todos'} onClick={() => changeFeedMode('todos')}>Todos</button><button aria-pressed={feedMode === 'seguindo'} onClick={() => changeFeedMode('seguindo')}>Seguindo</button></div>
+            <div className="topic-buttons">{categories.map(item => <button key={item.id} aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>)}</div>
+          </section>
           {loading && <section className="status">Carregando posts...</section>}
           {!loading && error && (
             <section className="error-panel">
@@ -613,7 +659,7 @@ function App() {
               {filteredPosts.map(renderPost)}
               {filteredPosts.length === 0 && (
                 <section className="status">
-                  {user ? 'Nenhuma publicação dos perfis que você segue ainda.' : 'Entre para ver as publicações dos perfis que você segue.'}
+                  {feedMode === 'seguindo' ? (user ? 'Nenhuma publicação nesta seleção. Encontre pessoas pela busca para começar a seguir.' : 'Entre para ver as publicações dos perfis que você segue.') : 'Nenhuma publicação nesta categoria ainda. Que tal compartilhar uma reflexão?'}
                   {!user && <button className="gradient-button inline-action" onClick={() => setModalMode('login')}>Entrar</button>}
                 </section>
               )}
@@ -643,14 +689,16 @@ function App() {
                   value={newPost.titulo}
                   onChange={(event) => setNewPost((current) => ({ ...current, titulo: event.target.value }))}
                   placeholder="Título"
+                  maxLength={160}
                 />
                 <textarea
                   value={newPost.conteudo}
                   onChange={(event) => setNewPost((current) => ({ ...current, conteudo: event.target.value }))}
                   placeholder="Escreva sua mensagem"
+                  maxLength={10000}
                   rows="7"
                 />
-                <button className="gradient-button">Publicar</button>
+                <button className="gradient-button" disabled={publishing}>{publishing ? 'Publicando...' : 'Publicar'}</button>
               </form>
             </>
           ) : (
@@ -753,7 +801,7 @@ function App() {
                   <section className="status compact-status">Nenhuma publicação postada ainda.</section>
                 )}
               </div>
-              {isOwnProfile && <button className="outline-button" onClick={() => updateUser(null)}>Sair da conta</button>}
+              {isOwnProfile && <button className="outline-button" onClick={logout}>Sair da conta</button>}
             </>
           ) : (
             <section className="status">
@@ -765,22 +813,10 @@ function App() {
       )}
 
       <nav className="bottom-nav" aria-label="Menu principal">
-        <button className={tab === 'inicio' ? 'active' : ''} onClick={() => setTab('inicio')}>
-          <Home size={21} />
-          <span>Início</span>
-        </button>
-        <button className={tab === 'criar' ? 'active' : ''} onClick={() => setTab('criar')}>
-          <PlusCircle size={21} />
-          <span>Criar</span>
-        </button>
-        <button className={tab === 'pesquisar' ? 'active' : ''} onClick={() => { setTab('pesquisar'); if (!searchPosts.length && !searchProfiles.length) runSearch(); }}>
-          <Search size={21} />
-          <span>Pesquisar</span>
-        </button>
-        <button className={tab === 'perfil' && !selectedProfile ? 'active' : ''} onClick={() => { setSelectedProfile(null); setTab('perfil'); }}>
-          <User size={21} />
-          <span>Perfil</span>
-        </button>
+        {[['inicio', 'Início', Home], ['fe', 'Fé', BookOpen], ['mente', 'Mente', Brain], ['comunidade', 'Comunidade', Users], ['perfil', 'Perfil', User]].map(([id, label, Icon]) => {
+          const active = tab === id || (id === 'comunidade' && ['criar', 'pesquisar'].includes(tab));
+          return <button key={id} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined} onClick={() => navigate(id)}><Icon size={21} /><span>{label}</span></button>;
+        })}
       </nav>
 
       {modalMode && (
@@ -796,6 +832,5 @@ function App() {
 }
 
 export default App;
-
 
 

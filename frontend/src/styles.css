@@ -774,7 +774,7 @@ button:not(:disabled):hover {
   width: min(620px, calc(100% - 24px));
   min-height: 64px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 4px;
   padding: 7px;
   background: rgba(255, 255, 255, 0.94);
@@ -783,6 +783,62 @@ button:not(:disabled):hover {
   box-shadow: 0 14px 34px rgba(59, 28, 83, 0.2);
   transform: translateX(-50%);
   backdrop-filter: blur(16px);
+}
+
+/* Meu Revigório: descoberta, leitura e navegação acessível. */
+.discovery-page { max-width: 960px; margin: 30px auto; padding: 0 20px; }
+.welcome-panel { position: relative; overflow: hidden; padding: 38px; color: white; background: linear-gradient(120deg, #49206d, #7435a4 65%, #984877); border-radius: 28px; }
+.eyebrow { display: flex; align-items: center; gap: 8px; color: #70408c; font-size: 11px; font-weight: 800; letter-spacing: 1.3px; line-height: 1.6; }
+.welcome-panel .eyebrow { color: #f0ddff; }
+.welcome-panel h1 { position: relative; z-index: 1; margin: 20px 0 14px; font-size: clamp(30px, 5vw, 44px); letter-spacing: -1.5px; }
+.welcome-panel h1 span { display: block; max-width: 570px; margin-top: 13px; font-size: clamp(18px, 3vw, 24px); font-weight: 500; line-height: 1.5; letter-spacing: -.4px; }
+.welcome-panel p { position: relative; z-index: 1; color: #f3e7fa; line-height: 1.8; font-size: 15px; }
+.welcome-action { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 14px; margin-top: 12px; padding: 14px 18px; color: #4b216d; background: #fff; border: 0; border-radius: 12px; font-weight: 750; cursor: pointer; }
+.welcome-heart { position: absolute; right: -28px; top: 60px; width: 240px; height: 240px; opacity: .09; transform: rotate(-15deg); pointer-events: none; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 30px 0 16px; }
+.section-heading h2 { margin: 0; color: #3f2854; font-size: 19px; line-height: 1.5; }
+.section-heading > span { color: #73617c; font-size: 12px; white-space: nowrap; }
+.discovery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.discovery-card { min-width: 0; padding: 26px; background: #fff; border: 1px solid #e8deef; border-radius: 20px; box-shadow: 0 5px 18px #49206d06; }
+.discovery-page > .discovery-card { margin: 20px 0; }
+.discovery-card h2 { color: #3f2854; font-size: 22px; line-height: 1.35; letter-spacing: -.4px; }
+.discovery-card h3 { color: #503460; font-size: 16px; margin-top: 24px; }
+.discovery-card p { color: #594f63; font-size: 15px; line-height: 1.85; overflow-wrap: anywhere; }
+.discovery-card small { color: #73617c; line-height: 1.6; }
+.scripture-card { background: #f7f0ff; border-color: #e3d1f3; }
+.scripture-reference { display: inline-block; color: #673389; font-size: 15px; }
+.step-card { background: #fff5f8; border-color: #f1dce4; }
+.card-link { display: inline-flex; align-items: center; gap: 9px; padding: 8px 0; border: 0; background: transparent; color: #71318d; font-weight: 750; text-align: left; font-size: 14px; cursor: pointer; }
+.page-intro { margin-bottom: 26px; }
+.page-intro h1 { color: #49245f; font-size: clamp(27px, 4vw, 35px); line-height: 1.25; margin: 12px 0; letter-spacing: -.8px; }
+.page-intro p { color: #73617c; line-height: 1.7; }
+.topic-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.topic-buttons button { min-height: 42px; border: 1px solid #dccbe7; border-radius: 999px; background: white; color: #634775; padding: 9px 16px; cursor: pointer; font-size: 13px; }
+.topic-buttons button[aria-pressed="true"] { background: #68318d; color: white; border-color: #68318d; }
+.educational-note { padding: 16px 20px; margin: 20px 0; border-left: 3px solid #a47cb9; border-radius: 0 12px 12px 0; background: #efe7f7; color: #574564; font-size: 14px; line-height: 1.7; }
+.discovery-card details { margin: 16px 0; }
+.discovery-card summary { color: #68318d; font-weight: 700; cursor: pointer; padding: 10px 0; }
+.source-link { display: block; margin-top: 20px; font-size: 12px; color: #673389; line-height: 1.7; text-underline-offset: 3px; }
+.community-intro { max-width: 680px; }
+.publish-action { display: inline-flex; align-items: center; gap: 9px; padding: 13px 18px; border-radius: 12px; }
+.community-filters { max-width: 640px; margin: 18px auto; }
+.home-posts { display: grid; gap: 16px; }
+.home-posts .post { margin: 0; }
+.global-error { max-width: 920px; display: flex; justify-content: space-between; align-items: center; gap: 15px; margin: 20px auto; padding: 16px; border: 1px solid #e1b4ba; background: #fff0f1; color: #882238; border-radius: 12px; }
+.global-error button { flex-shrink: 0; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 8px; }
+:focus-visible { outline: 3px solid #8442b6; outline-offset: 4px; }
+.bottom-nav { padding-bottom: max(7px, env(safe-area-inset-bottom)); }
+@media (max-width: 720px) {
+  .discovery-page { margin: 22px auto; padding: 0 16px; }
+  .welcome-panel { padding: 26px 22px; border-radius: 22px; }
+  .discovery-grid { grid-template-columns: 1fr; gap: 14px; }
+  .discovery-card { padding: 22px; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .community-filters, .global-error { margin-left: 16px; margin-right: 16px; }
+  .bottom-nav button span { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
 .bottom-nav button {
