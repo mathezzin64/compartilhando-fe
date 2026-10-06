@@ -14,6 +14,9 @@ import {
   PlusCircle,
   RefreshCw,
   Search,
+  Settings,
+  Flag,
+  Share2,
   Trash2,
   User,
   UserPlus,
@@ -23,6 +26,10 @@ import {
 import API_BASE_URL from './api';
 import { apiFetch, readUser, saveToken, clearSession } from './session';
 import { HomePage, FaithPage, MindPage } from './Discovery';
+import PreferencesPage from './PreferencesPage';
+import SupportPage from './SupportPage';
+import { usePreferences } from './preferences';
+import useDialog from './useDialog';
 
 const categories = [
   { id: 'todas', label: 'Todas', icon: Heart },
@@ -40,6 +47,7 @@ const categoryLabels = {
 };
 
 function AuthModal({ mode, onClose, onModeChange, onAuth }) {
+  const dialogRef = useDialog(onClose);
   const isRegister = mode === 'register';
   const [form, setForm] = useState({ nome: '', email: '', senha: '' });
   const [loading, setLoading] = useState(false);
@@ -62,10 +70,11 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
     try {
       const response = await apiFetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
+        timeoutMs: 45000,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({ error: 'O serviço de contas está indisponível no momento. Tente novamente mais tarde.' }));
 
       if (!response.ok) {
         setError(data.error || 'Não foi possível continuar.');
@@ -79,8 +88,8 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
       saveToken(data.token);
       onAuth(data.usuario);
       onClose();
-    } catch {
-      setError('Erro de conexão com o servidor.');
+    } catch (error) {
+      setError(error.name === 'TimeoutError' ? error.message : 'Não foi possível conectar ao serviço de contas. Verifique sua conexão e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -88,13 +97,14 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 
   return (
     <div className="modal-backdrop">
-      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <section ref={dialogRef} tabIndex={-1} className="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="icon-button modal-close" onClick={onClose} aria-label="Fechar">
           <X size={22} />
         </button>
 
         <h2 id="auth-title">{isRegister ? 'Criar Conta' : 'Entrar'}</h2>
-        {error && <p className="form-error">{error}</p>}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <p className="auth-help">{isRegister ? "Crie sua conta com e-mail e senha." : "Entre com o e-mail e a senha cadastrados no Revigório."}</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           {isRegister && (
@@ -103,6 +113,8 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
               <span className="field">
                 <User size={20} />
                 <input
+                  required
+                  maxLength={100}
                   name="nome"
                   value={form.nome}
                   onChange={handleChange}
@@ -119,6 +131,8 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
             <span className="field">
               <Mail size={20} />
               <input
+                required
+                maxLength={254}
                 name="email"
                 type="email"
                 value={form.email}
@@ -135,6 +149,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
             <span className="field">
               <Lock size={20} />
               <input
+                required
                 name="senha"
                 type="password"
                 value={form.senha}
@@ -153,7 +168,7 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
           </button>
         </form>
 
-        <button className="text-button" onClick={() => onModeChange(isRegister ? 'login' : 'register')}>
+        <button className="text-button" disabled={loading} onClick={() => { setError(''); onModeChange(isRegister ? 'login' : 'register'); }}>
           {isRegister ? 'Já tem uma conta? Entrar' : 'Não tem uma conta? Criar conta'}
         </button>
       </section>
@@ -162,6 +177,9 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
 }
 
 function App() {
+  const { preferences, setPreferences, saved } = usePreferences();
+  const [reportPost, setReportPost] = useState(null);
+  const contentRef = useRef(null);
   const [tab, setTab] = useState('inicio');
   const [feedMode, setFeedMode] = useState('todos');
   const [category, setCategory] = useState('todas');
@@ -179,6 +197,7 @@ function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState('');
   const [modalMode, setModalMode] = useState(null);
+  const [notice, setNotice] = useState('');
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const touchStartY = useRef(null);
@@ -198,7 +217,27 @@ function App() {
     setTab(target);
     setError('');
     if (target === 'inicio') { setFeedMode('todos'); loadPosts('todos', null); }
+    setNotice('');
     window.scrollTo({ top: 0 });
+    requestAnimationFrame(() => contentRef.current?.focus({ preventScroll: true }));
+  };
+
+  const openSupport = (post = null) => {
+    setReportPost(post);
+    navigate('ajuda');
+  };
+
+  const sharePost = async (post) => {
+    const text = `${post.titulo}\n\n${post.conteudo}\n\n${post.autorNome} • Revigório de Fé`;
+    try {
+      if (navigator.share) await navigator.share({ title: post.titulo, text });
+      else {
+        await navigator.clipboard.writeText(text);
+        setNotice('Publicação copiada. Cole a mensagem no aplicativo em que deseja compartilhar.');
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') setError('Não foi possível abrir o compartilhamento. Você pode selecionar e copiar o texto da publicação.');
+    }
   };
 
   const logout = async () => {
@@ -463,7 +502,7 @@ function App() {
       setModalMode('login');
       return;
     }
-    if (!newPost.titulo.trim() || !newPost.conteudo.trim()) return;
+    if (!newPost.conteudo.trim()) return;
 
     setPublishing(true);
     try {
@@ -472,6 +511,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newPost,
+          titulo: newPost.titulo.trim() || newPost.conteudo.trim().split('\n')[0].slice(0, 80),
           autorId: user.id,
           autorNome: user.nome
         })
@@ -570,6 +610,10 @@ function App() {
           </button>
         )}
       </footer>
+      <div className="post-actions">
+        <button className="report-button" onClick={() => sharePost(post)} aria-label={`Compartilhar: ${post.titulo}`}><Share2 size={16} aria-hidden="true" /> Compartilhar</button>
+        <button className="report-button" onClick={() => openSupport(post)} aria-label={`Relatar conteúdo: ${post.titulo}`}><Flag size={16} aria-hidden="true" /> Relatar conteúdo</button>
+      </div>
     </article>
   );
 
@@ -599,6 +643,7 @@ function App() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      <a href="#conteudo" className="skip-link">Pular para o conteúdo</a>
       <div className={`pull-refresh ${pullDistance > 0 || isRefreshing ? 'visible' : ''}`} style={{ height: pullDistance ? `${pullDistance}px` : undefined }}>
         <RefreshCw size={18} className={isRefreshing ? 'spin' : ''} />
         <span>{isRefreshing ? 'Atualizando...' : 'Solte para atualizar'}</span>
@@ -615,6 +660,8 @@ function App() {
           </span>
         </a>
 
+        <div className="header-actions">
+          <button className="settings-button" onClick={() => navigate('preferencias')} aria-label="Preferências e acessibilidade" title="Preferências e acessibilidade"><Settings size={22} aria-hidden="true" /></button>
         {user ? (
           <div className="user-actions">
             <button onClick={logout}>Sair</button>
@@ -625,8 +672,13 @@ function App() {
             Entrar
           </button>
         )}
+        </div>
       </header>
 
+      <div id="conteudo" ref={contentRef} tabIndex={-1}>
+      {notice && <p className="global-notice" role="status">{notice}</p>}
+      {tab === 'preferencias' && <PreferencesPage preferences={preferences} setPreferences={setPreferences} saved={saved} onSupport={() => openSupport()} />}
+      {tab === 'ajuda' && <SupportPage key={reportPost?.id || 'general'} post={reportPost} />}
       {error && <div className="global-error" role="alert">{error}<button onClick={() => setError('')} aria-label="Fechar aviso"><X size={18} /></button></div>}
       {tab === 'inicio' && <HomePage user={user} navigate={navigate} posts={posts} renderPost={renderPost} loading={loading} />}
       {tab === 'fe' && <FaithPage navigate={navigate} />}
@@ -641,6 +693,7 @@ function App() {
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
+                aria-label="Pesquisar perfil ou publicação"
                 placeholder="Pesquisar perfil ou publicação"
               />
               <button>Buscar</button>
@@ -681,7 +734,7 @@ function App() {
                 <h2>Criar post</h2>
               </div>
               <form onSubmit={publishPost}>
-                <select
+                <select aria-label="Categoria da publicação"
                   value={newPost.categoria}
                   onChange={(event) => setNewPost((current) => ({ ...current, categoria: event.target.value }))}
                 >
@@ -692,16 +745,20 @@ function App() {
                 <input
                   value={newPost.titulo}
                   onChange={(event) => setNewPost((current) => ({ ...current, titulo: event.target.value }))}
-                  placeholder="Título"
+                  aria-label="Título da publicação (opcional)"
+                  placeholder="Título (opcional)"
                   maxLength={160}
                 />
                 <textarea
+                  required
                   value={newPost.conteudo}
                   onChange={(event) => setNewPost((current) => ({ ...current, conteudo: event.target.value }))}
+                  aria-label="Conteúdo da publicação"
                   placeholder="Escreva sua mensagem"
                   maxLength={10000}
                   rows="7"
                 />
+                <small className="compose-hint">Uma nota também é uma publicação. Escreva sua mensagem; o título é opcional.</small>
                 <button className="gradient-button" disabled={publishing}>{publishing ? 'Publicando...' : 'Publicar'}</button>
               </form>
             </>
@@ -721,7 +778,8 @@ function App() {
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Pesquisar perfil ou publicação"
+              aria-label="Pesquisar perfil ou publicação"
+                placeholder="Pesquisar perfil ou publicação"
             />
             <button>Buscar</button>
           </form>
@@ -816,6 +874,7 @@ function App() {
         </section>
       )}
 
+      </div>
       <nav className="bottom-nav" aria-label="Menu principal">
         {[['inicio', 'Início', Home], ['fe', 'Fé', BookOpen], ['mente', 'Mente', Brain], ['comunidade', 'Comunidade', Users], ['perfil', 'Perfil', User]].map(([id, label, Icon]) => {
           const active = tab === id || (id === 'comunidade' && ['criar', 'pesquisar'].includes(tab));
