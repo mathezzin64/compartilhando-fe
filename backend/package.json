@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node index.js",
     "start": "node index.js",
-    "test": "node --test auth.test.js"
+    "test": "node --test auth.test.js runtime.test.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

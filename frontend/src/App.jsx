@@ -24,7 +24,7 @@ import {
   X
 } from 'lucide-react';
 import API_BASE_URL from './api';
-import { apiFetch, readUser, saveToken, clearSession } from './session';
+import { apiFetch, readUser, saveToken, clearSession, readToken, persistUser } from './session';
 import { HomePage, FaithPage, MindPage } from './Discovery';
 import PreferencesPage from './PreferencesPage';
 import SupportPage from './SupportPage';
@@ -47,6 +47,12 @@ const categoryLabels = {
 };
 
 function AuthModal({ mode, onClose, onModeChange, onAuth }) {
+  const authRequest = useRef(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; authRequest.current?.abort(); };
+  }, []);
   const dialogRef = useDialog(onClose);
   const isRegister = mode === 'register';
   const [form, setForm] = useState({ nome: '', email: '', senha: '' });
@@ -66,16 +72,20 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
       return;
     }
 
+    if (loading) return;
     setLoading(true);
+    authRequest.current = new AbortController();
     try {
       const response = await apiFetch(`${API_BASE_URL}/auth/${isRegister ? 'register' : 'login'}`, {
         method: 'POST',
         timeoutMs: 45000,
+        signal: authRequest.current.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       });
       const data = await response.json().catch(() => ({ error: 'O serviço de contas está indisponível no momento. Tente novamente mais tarde.' }));
 
+      if (!alive.current) return;
       if (!response.ok) {
         setError(data.error || 'Não foi possível continuar.');
         return;
@@ -89,9 +99,10 @@ function AuthModal({ mode, onClose, onModeChange, onAuth }) {
       onAuth(data.usuario);
       onClose();
     } catch (error) {
+      if (!alive.current || error.name === 'AbortError') return;
       setError(error.name === 'TimeoutError' ? error.message : 'Não foi possível conectar ao serviço de contas. Verifique sua conexão e tente novamente.');
     } finally {
-      setLoading(false);
+      if (alive.current) setLoading(false);
     }
   };
 
@@ -181,6 +192,12 @@ function App() {
   const [reportPost, setReportPost] = useState(null);
   const contentRef = useRef(null);
   const [tab, setTab] = useState('inicio');
+  const feedRequest = useRef(0);
+  const profileRequest = useRef(0);
+  const searchRequest = useRef(0);
+  const [feedError, setFeedError] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [feedMode, setFeedMode] = useState('todos');
   const [category, setCategory] = useState('todas');
   const [posts, setPosts] = useState([]);
@@ -217,6 +234,7 @@ function App() {
     setTab(target);
     setError('');
     if (target === 'inicio') { setFeedMode('todos'); loadPosts('todos', null); }
+    else if (target === 'comunidade') loadPosts(feedMode, null);
     setNotice('');
     window.scrollTo({ top: 0 });
     requestAnimationFrame(() => contentRef.current?.focus({ preventScroll: true }));
@@ -241,16 +259,21 @@ function App() {
   };
 
   const logout = async () => {
+    const revocation = apiFetch(API_BASE_URL + '/auth/logout', { method: 'POST' });
+    clearSession();
+    updateUser(null);
+    profileRequest.current++;
+    setSelectedProfile(null);
+    setProfileDetails(null);
+    setProfilePosts([]);
+    setTab('inicio');
+    setNotice('Você saiu deste aparelho.');
     try {
-      const response = await apiFetch(API_BASE_URL + '/auth/logout', { method: 'POST' });
+      const response = await revocation;
       if (!response.ok && response.status !== 401) throw new Error();
-      clearSession();
-      updateUser(null);
-      setSelectedProfile(null);
-      setProfileDetails(null);
-      setProfilePosts([]);
-      setTab('inicio');
-    } catch { setError('Não foi possível encerrar a sessão. Tente novamente.'); }
+    } catch {
+      if (!readToken()) setNotice('Você saiu deste aparelho. Não foi possível confirmar o encerramento da sessão no servidor.');
+    }
   };
 
   useEffect(() => {
@@ -262,10 +285,15 @@ function App() {
       setError('Sua sessão expirou. Entre novamente para publicar ou editar seu perfil.');
     };
     window.addEventListener('revigorio-session-expired', expired);
-    if (readUser()) apiFetch(API_BASE_URL + '/auth/me').then(async response => {
-      if (response.ok) updateUser((await response.json()).usuario);
+    let active = true;
+    const token = readToken();
+    if (token) apiFetch(API_BASE_URL + '/auth/me').then(async response => {
+      if (response.ok) {
+        const data = await response.json();
+        if (active && readToken() === token) updateUser(data.usuario);
+      }
     }).catch(() => {});
-    return () => window.removeEventListener('revigorio-session-expired', expired);
+    return () => { active = false; window.removeEventListener('revigorio-session-expired', expired); };
   }, []);
 
   const updateUser = (nextUser) => {
@@ -279,93 +307,72 @@ function App() {
   };
 
   const loadPosts = async (mode = feedMode, profile = selectedProfile) => {
+    const request = ++feedRequest.current;
     setLoading(true);
-    setError('');
+    setFeedError('');
     try {
-      if (mode === 'seguindo' && !user) {
-        setPosts([]);
-        return;
-      }
-
+      if (mode === 'seguindo' && !user) { setPosts([]); return; }
       const response = await apiFetch(buildPostUrl(mode, profile));
       const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || 'Não foi possível carregar os posts. Tente novamente.');
-        return;
+      if (!response.ok) throw new Error('Feed indisponível.');
+      if (request === feedRequest.current) setPosts(Array.isArray(data) ? data : data.posts || []);
+    } catch {
+      if (request === feedRequest.current) {
+        setPosts([]);
+        setFeedError('Não foi possível carregar a comunidade. Tente novamente em instantes.');
       }
-      setPosts(Array.isArray(data) ? data : data.posts || []);
-    } catch {
-      setError('Não foi possível carregar os posts. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
+    } finally { if (request === feedRequest.current) setLoading(false); }
   };
-
   const loadProfiles = async (term = '') => {
-    try {
-      const params = new URLSearchParams();
-      if (user) params.set('viewerId', String(user.id));
-      if (term.trim()) params.set('q', term.trim());
-      const response = await apiFetch(`${API_BASE_URL}/usuarios?${params.toString()}`);
-      const data = await response.json();
-      setProfiles(response.ok ? data : []);
-      return response.ok ? data : [];
-    } catch {
-      setProfiles([]);
-      return [];
-    }
+    const params = new URLSearchParams();
+    if (user) params.set('viewerId', String(user.id));
+    if (term.trim()) params.set('q', term.trim());
+    const response = await apiFetch(API_BASE_URL + '/usuarios?' + params);
+    const data = await response.json();
+    if (!response.ok) throw new Error('Pesquisa indisponível.');
+    return Array.isArray(data) ? data : [];
   };
-
   const loadProfilePage = async (profile = user) => {
     if (!profile) return;
-
+    const request = ++profileRequest.current;
     setProfileLoading(true);
+    setProfileError('');
+    setProfileDetails(profile);
+    setProfilePosts([]);
     try {
-      const response = await apiFetch(`${API_BASE_URL}/usuarios/${profile.id}/posts`);
+      const response = await apiFetch(API_BASE_URL + '/usuarios/' + profile.id + '/posts');
       const data = await response.json();
-
-      if (response.ok) {
-        const perfil = {
-          ...data.usuario,
-          seguindo: profile.seguindo ?? selectedProfile?.seguindo ?? (user?.seguindoIds || []).includes(data.usuario.id)
-        };
-        setProfileDetails(perfil);
-        setProfilePosts(data.posts || []);
-      } else {
-        setProfileDetails(profile);
-        setProfilePosts([]);
-      }
+      if (!response.ok) throw new Error('Perfil indisponível.');
+      if (request !== profileRequest.current) return;
+      setProfileDetails({ ...data.usuario, seguindo: (user?.seguindoIds || []).includes(data.usuario.id) });
+      setProfilePosts(data.posts || []);
     } catch {
-      setProfileDetails(profile);
-      setProfilePosts([]);
-    } finally {
-      setProfileLoading(false);
-    }
+      if (request === profileRequest.current) setProfileError('Não foi possível carregar este perfil. Tente novamente.');
+    } finally { if (request === profileRequest.current) setProfileLoading(false); }
   };
-
   const runSearch = async (event, termOverride) => {
     event?.preventDefault();
-    const termoBusca = typeof termOverride === 'string' ? termOverride : searchTerm;
+    const term = typeof termOverride === 'string' ? termOverride : searchTerm;
+    const request = ++searchRequest.current;
     if (typeof termOverride === 'string') setSearchTerm(termOverride);
     setSearchLoading(true);
-    setError('');
+    setSearchError('');
     try {
       const params = new URLSearchParams();
-      if (termoBusca.trim()) params.set('q', termoBusca.trim());
-      const [postsResponse, profilesResult] = await Promise.all([
-        apiFetch(`${API_BASE_URL}/posts?${params.toString()}`),
-        loadProfiles(termoBusca)
-      ]);
-      const postsData = await postsResponse.json();
-      setSearchPosts(postsResponse.ok ? postsData : []);
+      if (term.trim()) params.set('q', term.trim());
+      const [response, profilesResult] = await Promise.all([apiFetch(API_BASE_URL + '/posts?' + params), loadProfiles(term)]);
+      const data = await response.json();
+      if (!response.ok) throw new Error('Pesquisa indisponível.');
+      if (request !== searchRequest.current) return;
+      setSearchPosts(Array.isArray(data) ? data : []);
       setSearchProfiles(profilesResult);
     } catch {
-      setSearchPosts([]);
-      setSearchProfiles([]);
-      setError('Não foi possível pesquisar agora.');
-    } finally {
-      setSearchLoading(false);
-    }
+      if (request === searchRequest.current) {
+        setSearchPosts([]);
+        setSearchProfiles([]);
+        setSearchError('Não foi possível pesquisar agora. Tente novamente.');
+      }
+    } finally { if (request === searchRequest.current) setSearchLoading(false); }
   };
 
   const refreshCurrent = async () => {
@@ -381,15 +388,7 @@ function App() {
     loadPosts('todos', null);
   }, [user?.id]);
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('revigorio-fe-user', JSON.stringify(user));
-      localStorage.removeItem('compartilhando-fe-user');
-    } else {
-      localStorage.removeItem('revigorio-fe-user');
-      localStorage.removeItem('compartilhando-fe-user');
-    }
-  }, [user]);
+  useEffect(() => { persistUser(user); }, [user]);
 
   useEffect(() => {
     if (tab === 'perfil' && (selectedProfile || user)) loadProfilePage(selectedProfile || user);
@@ -421,7 +420,7 @@ function App() {
   const openProfile = async (profile) => {
     setSelectedProfile(profile);
     setTab('perfil');
-    await loadProfilePage(profile);
+    window.scrollTo({ top: 0 });
   };
 
   const openSearch = async (event) => {
@@ -680,7 +679,7 @@ function App() {
       {tab === 'preferencias' && <PreferencesPage preferences={preferences} setPreferences={setPreferences} saved={saved} onSupport={() => openSupport()} />}
       {tab === 'ajuda' && <SupportPage key={reportPost?.id || 'general'} post={reportPost} />}
       {error && <div className="global-error" role="alert">{error}<button onClick={() => setError('')} aria-label="Fechar aviso"><X size={18} /></button></div>}
-      {tab === 'inicio' && <HomePage user={user} navigate={navigate} posts={posts} renderPost={renderPost} loading={loading} />}
+      {tab === 'inicio' && <HomePage user={user} navigate={navigate} posts={posts} renderPost={renderPost} loading={loading} error={feedError} onRetry={() => loadPosts('todos', null)} />}
       {tab === 'fe' && <FaithPage navigate={navigate} />}
       {tab === 'mente' && <MindPage />}
 
@@ -705,13 +704,13 @@ function App() {
             <div className="topic-buttons">{categories.map(item => <button key={item.id} aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>{item.label}</button>)}</div>
           </section>
           {loading && <section className="status">Carregando posts...</section>}
-          {!loading && error && (
+          {!loading && feedError && (
             <section className="error-panel">
-              <p>{error}</p>
+              <p>{feedError}</p>
               <button onClick={() => loadPosts()}>Tentar novamente</button>
             </section>
           )}
-          {!loading && !error && (
+          {!loading && !feedError && (
             <section className="feed">
               {filteredPosts.map(renderPost)}
               {filteredPosts.length === 0 && (
@@ -786,7 +785,8 @@ function App() {
 
           {searchLoading && <p className="profiles-empty">Pesquisando...</p>}
 
-          {!searchLoading && (
+          {searchError && <p role="alert" className="global-error">{searchError}</p>}
+          {!searchLoading && !searchError && (
             <>
               <div className="section-title">
                 <UserPlus size={18} />
@@ -856,10 +856,11 @@ function App() {
                 <MessageCircle size={18} />
                 <h2>Posts publicados</h2>
               </div>
+              {profileError && <div role="alert" className="error-panel"><p>{profileError}</p><button onClick={() => loadProfilePage(profileTarget)}>Tentar novamente</button></div>}
               <div className="profile-posts">
                 {profileLoading && <section className="status compact-status">Carregando posts...</section>}
                 {!profileLoading && profilePosts.map((post) => renderPost(post, { allowDelete: isOwnProfile }))}
-                {!profileLoading && profilePosts.length === 0 && (
+                {!profileLoading && !profileError && profilePosts.length === 0 && (
                   <section className="status compact-status">Nenhuma publicação postada ainda.</section>
                 )}
               </div>

@@ -1,6 +1,7 @@
 ﻿require('dotenv').config();
 
 const { hashPassword, verifyPassword, createAuth } = require('./auth');
+const { startRuntime } = require('./runtime');
 const cors = require('cors');
 const dns = require('dns');
 const express = require('express');
@@ -11,17 +12,22 @@ const PORT = process.env.PORT || 3002;
 const MONGODB_URI = process.env.MONGODB_URI;
 const DNS_SERVERS = process.env.DNS_SERVERS;
 
-if (require.main === module && !MONGODB_URI) {
-  console.error('Erro: defina a variável MONGODB_URI com a string de conexão do MongoDB.');
-  process.exit(1);
-}
-
-if (DNS_SERVERS) {
-  dns.setServers(DNS_SERVERS.split(',').map((server) => server.trim()).filter(Boolean));
-}
-
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.locals.databaseReady = () => false;
+app.get('/health', (req, res) => {
+  const ready = app.locals.databaseReady();
+  res.set('Cache-Control', 'no-store').status(ready ? 200 : 503).json({
+    status: ready ? 'ok' : 'unavailable', database: ready ? 'connected' : 'unavailable',
+    app: 'REVIGÓRIO DE FÉ', release: 'beta-stability-1'
+  });
+});
+app.get('/live', (req, res) => res.json({ status: 'running' }));
+app.get('/', (req, res) => res.json({ app: 'REVIGÓRIO DE FÉ', ready: app.locals.databaseReady() }));
+app.use((req, res, next) => {
+  if (app.locals.databaseReady()) return next();
+  res.set('Retry-After', '15').status(503).json({ error: 'O serviço de contas e publicações está temporariamente indisponível. Tente novamente mais tarde.' });
+});
 
 const baseOptions = {
   versionKey: false,
@@ -147,13 +153,6 @@ async function seedDatabase() {
   ]);
 }
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', app: 'REVIGÓRIO DE FÉ', release: 'meu-revigorio-1' });
-});
-
-app.get('/', (req, res) => {
-  res.send('Backend REVIGÓRIO DE FÉ rodando com MongoDB.');
-});
 
 app.post('/auth/register', async (req, res, next) => {
   try {
@@ -483,21 +482,25 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Erro interno no servidor' });
 });
 
-async function start() {
-  try {
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
-    await seedDatabase();
-    console.log('MongoDB conectado ao REVIGÓRIO DE FÉ.');
-    app.listen(PORT, () => {
-      console.log(`Backend REVIGÓRIO DE FÉ rodando na porta ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Erro ao conectar no MongoDB:', error.message);
-    process.exit(1);
-  }
+function start() {
+  return startRuntime(app, {
+    port: PORT,
+    configured: Boolean(MONGODB_URI),
+    connect: async () => {
+      if (DNS_SERVERS) dns.setServers(DNS_SERVERS.split(',').map(value => value.trim()).filter(Boolean));
+      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
+    },
+    initialize: seedDatabase,
+    isConnected: () => mongoose.connection.readyState === 1
+  });
 }
-
-if (require.main === module) start();
-module.exports = { app, Usuario, Post, Sessao };
-
-
+if (require.main === module) {
+  const runtime = start();
+  const shutdown = async () => {
+    await runtime.stop();
+    await mongoose.disconnect();
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+}
+module.exports = { app, Usuario, Post, Sessao, start };

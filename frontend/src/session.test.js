@@ -1,6 +1,6 @@
 import { test, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { apiFetch, readUser, saveToken } from './session.js';
+import { apiFetch, readUser, saveToken, persistUser, clearSession, readToken } from './session.js';
 
 const originalFetch = globalThis.fetch;
 const originalTimeout = AbortSignal.timeout;
@@ -8,7 +8,7 @@ const storage = () => { const items = new Map(); return { getItem: key => items.
 globalThis.sessionStorage = storage();
 globalThis.localStorage = storage();
 globalThis.window = new EventTarget();
-beforeEach(() => { sessionStorage.clear(); localStorage.clear(); globalThis.fetch = originalFetch; AbortSignal.timeout = originalTimeout; });
+beforeEach(() => { clearSession(); sessionStorage.clear(); localStorage.clear(); globalThis.fetch = originalFetch; AbortSignal.timeout = originalTimeout; });
 after(() => { globalThis.fetch = originalFetch; AbortSignal.timeout = originalTimeout; });
 
 test('works in an Android WebView without AbortSignal.timeout', async () => {
@@ -50,4 +50,37 @@ test('malformed local user data does not crash the application', () => {
   saveToken('a'.repeat(64));
   localStorage.setItem('revigorio-fe-user', '{invalid');
   assert.equal(readUser(), null);
+});
+test('valid JSON with an invalid user shape is discarded', () => {
+  saveToken('a'.repeat(64));
+  localStorage.setItem('revigorio-fe-user', '{}');
+  assert.equal(readUser(), null);
+});
+test('blocked storage still allows login and local logout during the visit', () => {
+  const local = globalThis.localStorage;
+  const session = globalThis.sessionStorage;
+  const blocked = { getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); }, removeItem() { throw Error('blocked'); } };
+  try {
+    globalThis.localStorage = blocked;
+    globalThis.sessionStorage = blocked;
+    saveToken('a'.repeat(64));
+    persistUser({ id: 11, nome: 'Ana' });
+    assert.equal(readUser().nome, 'Ana');
+    clearSession();
+    assert.equal(readUser(), null);
+  } finally { globalThis.localStorage = local; globalThis.sessionStorage = session; }
+});
+test('a late 401 cannot destroy a newer login', async () => {
+  let finish;
+  saveToken('a'.repeat(64));
+  globalThis.fetch = () => new Promise(resolve => { finish = resolve; });
+  const response = apiFetch('https://api.example.test/auth/me');
+  saveToken('b'.repeat(64));
+  finish(new Response('{}', { status: 401 }));
+  await response;
+  assert.equal(readToken(), 'b'.repeat(64));
+});
+test('timeout covers a response whose headers arrive but whose body stalls', async () => {
+  globalThis.fetch = async () => ({ arrayBuffer: () => new Promise(() => {}) });
+  await assert.rejects(apiFetch('https://api.example.test/posts', { timeoutMs: 10 }), { name: 'TimeoutError' });
 });

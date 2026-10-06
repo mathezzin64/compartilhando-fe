@@ -20,9 +20,17 @@ before(async () => {
 });
 after(async () => { await new Promise(resolve => server.close(resolve)); });
 beforeEach(() => {
+  app.locals.databaseReady = () => true;
   users = [{ id: 11, nome: 'Ana', email: 'ana@example.test', senhaHash: digestToken('senha-antiga') }];
   sessions = [{ tokenHash: digestToken(validToken), usuarioId: 11, expiresAt: new Date(Date.now() + 60000) }];
   posts = [];
+});
+test('health and database routes report 503 while the database is unavailable', async () => {
+  app.locals.databaseReady = () => false;
+  assert.equal((await request('/health')).status, 503);
+  assert.equal((await request('/posts')).status, 503);
+  assert.equal((await request('/auth/login', { method: 'POST', body: { email: 'ana@example.test', senha: 'senha-antiga' } })).status, 503);
+  assert.equal((await request('/live')).status, 200);
 });
 async function request(route, { method = 'GET', token, body } = {}) {
   const response = await fetch(base + route, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });

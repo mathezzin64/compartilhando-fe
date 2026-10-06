@@ -17,7 +17,7 @@ function dailyReading() {
   return readings[day % readings.length];
 }
 
-export function HomePage({ user, navigate, posts, renderPost, loading }) {
+export function HomePage({ user, navigate, posts, renderPost, loading, error, onRetry }) {
   const daily = dailyReading();
   return <section className="discovery-page">
     <div className="welcome-panel">
@@ -35,7 +35,7 @@ export function HomePage({ user, navigate, posts, renderPost, loading }) {
       <article className="discovery-card step-card"><span className="eyebrow"><Sparkles size={17} /> PEQUENO PASSO</span><h2>Uma ação possível</h2><p>{daily.step}</p><small>No seu tempo, sem comparação.</small></article>
     </div>
     <div className="section-heading"><h2>Uma comunidade para caminhar junto</h2><button className="card-link" onClick={() => navigate('comunidade')}>Ver comunidade <ArrowRight size={16} /></button></div>
-    <div className="home-posts">{loading ? <p role="status">Carregando a comunidade…</p> : posts.length ? posts.slice(0, 2).map(renderPost) : <article className="discovery-card"><Users size={24} /><h2>Sua história pode acolher alguém</h2><p>Compartilhe uma reflexão, um testemunho ou um pedido de oração.</p><button className="card-link" onClick={() => navigate('criar')}>Criar publicação <ArrowRight size={16} /></button></article>}</div>
+    <div className="home-posts">{loading ? <p role="status">Carregando a comunidade…</p> : error ? <article className="discovery-card" role="alert"><h2>Comunidade indisponível no momento</h2><p>{error}</p><button className="outline-button" onClick={onRetry}>Tentar novamente</button></article> : posts.length ? posts.slice(0, 2).map(renderPost) : <article className="discovery-card"><Users size={24} /><h2>Sua história pode acolher alguém</h2><p>Compartilhe uma reflexão, um testemunho ou um pedido de oração.</p><button className="card-link" onClick={() => navigate('criar')}>Criar publicação <ArrowRight size={16} /></button></article>}</div>
   </section>;
 }
 
