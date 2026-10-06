@@ -84,3 +84,18 @@ test('timeout covers a response whose headers arrive but whose body stalls', asy
   globalThis.fetch = async () => ({ arrayBuffer: () => new Promise(() => {}) });
   await assert.rejects(apiFetch('https://api.example.test/posts', { timeoutMs: 10 }), { name: 'TimeoutError' });
 });
+test('storage with read access but no write quota uses the current in-memory session', () => {
+  const local = globalThis.localStorage;
+  const session = globalThis.sessionStorage;
+  const readOnly = { getItem: () => null, setItem() { throw Error('quota'); }, removeItem() {} };
+  try {
+    globalThis.localStorage = readOnly;
+    globalThis.sessionStorage = readOnly;
+    saveToken('a'.repeat(64));
+    persistUser({ id: 11, nome: 'Ana' });
+    assert.equal(readToken(), 'a'.repeat(64));
+    assert.equal(readUser().id, 11);
+    clearSession();
+    assert.equal(readToken(), null);
+  } finally { globalThis.localStorage = local; globalThis.sessionStorage = session; }
+});

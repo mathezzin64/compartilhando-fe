@@ -42,7 +42,8 @@ condições ocorreu em produção. Não enviar a URI ou senhas em mensagens.
 ## Verificação
 
 - 14 testes no backend (incluindo porta, prontidão, repetição de conexão e
-  autenticação) e 9 testes de sessão no frontend.
+  autenticação) e 10 testes de sessão no frontend, incluindo falta de espaço
+  para gravar dados no navegador.
 - Testes de navegador com respostas simuladas: falha/recuperação, respostas
   fora de ordem, perfil indisponível, logout offline e armazenamento bloqueado.
 - Compilação de produção do frontend.

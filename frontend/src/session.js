@@ -4,7 +4,7 @@ let memoryUser = null;
 const validToken = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const validUser = value => value && Number.isSafeInteger(value.id) && value.id > 0 && typeof value.nome === 'string' && value.nome.trim();
 export function readToken() {
-  try { const token = sessionStorage.getItem(KEY); return validToken(token) ? token : null; }
+  try { const token = sessionStorage.getItem(KEY); return validToken(token) ? token : memoryToken; }
   catch { return memoryToken; }
 }
 export function saveToken(token) {
@@ -30,6 +30,7 @@ export function readUser() {
   try {
     const user = JSON.parse(localStorage.getItem('revigorio-fe-user') || 'null');
     if (validUser(user)) return user;
+    if (user === null && validUser(memoryUser)) return memoryUser;
   } catch { if (validUser(memoryUser)) return memoryUser; }
   clearSession();
   return null;
